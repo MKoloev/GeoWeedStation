@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable, List, Optional
+from collections.abc import Callable
+
 from PySide6.QtCore import Signal, Slot
 
 from geo_weed_station.core.detector_base import BaseDetector
@@ -25,13 +26,13 @@ class BatchImageWorker(ManagedWorker):
     def __init__(
         self,
         source: FrameSource,
-        detector_factory: Optional[Callable[[], BaseDetector]] = None,
-        session: Optional[ProcessingSession] = None,
+        detector_factory: Callable[[], BaseDetector] | None = None,
+        session: ProcessingSession | None = None,
     ) -> None:
         super().__init__()
         self._source = source
         self._detector_factory = detector_factory
-        self._detector: Optional[BaseDetector] = None  # lazily created
+        self._detector: BaseDetector | None = None  # lazily created
         self._session = session
         self._cancel_event = threading.Event()
 
@@ -49,7 +50,7 @@ class BatchImageWorker(ManagedWorker):
             self._detector = detector
         return self._detector
 
-    def _set_status(self, index: int, status: ProcessingStatus, count: Optional[int] = None) -> None:
+    def _set_status(self, index: int, status: ProcessingStatus, count: int | None = None) -> None:
         if self._session is not None:
             self._session.update_entry(index, status, count)
         self.entry_status_changed.emit(index, status)
@@ -58,7 +59,7 @@ class BatchImageWorker(ManagedWorker):
         return self._cancel_event.is_set() or self.is_stop_requested
 
     @Slot(list, bool)
-    def process(self, entries: List[FileEntry], run_inference: bool) -> None:
+    def process(self, entries: list[FileEntry], run_inference: bool) -> None:
         """Process entries one by one; corrupted files become ERROR and the batch continues."""
         total = len(entries)
         ok = 0
@@ -71,7 +72,7 @@ class BatchImageWorker(ManagedWorker):
                 self._set_status(i, ProcessingStatus.PROCESSING)
                 try:
                     payload = self._source.load(entry)
-                    count: Optional[int] = len(payload.detections) if payload.detections else None
+                    count: int | None = len(payload.detections) if payload.detections else None
                     if run_inference:
                         detector = self._ensure_detector()
                         detections = detector.detect(payload.image)

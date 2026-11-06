@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import numpy as np
 
 
@@ -67,7 +68,7 @@ def _make_attr_tensor(name: str, tensor_proto: bytes) -> bytes:
     res = bytearray()
     res += _encode_length_delimited(1, name)
     res += _encode_int64(20, 4)  # AttributeType::TENSOR = 4
-    res += _encode_length_delimited(4, tensor_proto)
+    res += _encode_length_delimited(5, tensor_proto)
     return bytes(res)
 
 

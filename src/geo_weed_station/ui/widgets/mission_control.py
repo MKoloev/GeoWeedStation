@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -35,9 +36,9 @@ class MissionControl(QWidget):
     send_mission_requested = Signal(MissionTask)
     stop_requested = Signal(StopAction)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._planned_waypoints: List[Waypoint] = []
+        self._planned_waypoints: list[Waypoint] = []
         self._is_flight_locked = False
 
         self._init_ui()
@@ -230,7 +231,7 @@ class MissionControl(QWidget):
     # -------------------------------------------------------------------------
     # Internal actions & validation
     # -------------------------------------------------------------------------
-    def _collect_save_policy(self) -> Optional[SavePolicy]:
+    def _collect_save_policy(self) -> SavePolicy | None:
         save_img = self.cb_save_images.isChecked()
         save_meta = self.cb_save_metadata.isChecked()
         if save_img and save_meta:
@@ -241,8 +242,8 @@ class MissionControl(QWidget):
             return SavePolicy.METADATA_ONLY
         return None
 
-    def _validate_inputs(self) -> List[str]:
-        errors: List[str] = []
+    def _validate_inputs(self) -> list[str]:
+        errors: list[str] = []
         x1, y1 = self.spin_x1.value(), self.spin_y1.value()
         x2, y2 = self.spin_x2.value(), self.spin_y2.value()
 

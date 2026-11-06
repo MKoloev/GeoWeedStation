@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
-import numpy as np
+from collections.abc import Iterable
 
 from geo_weed_station.config.settings import MapSettings
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
@@ -20,7 +19,7 @@ class WeedMap:
     """In-memory collection of georeferenced weed points for the active session."""
 
     def __init__(self, coord_system: CoordinateSystem = CoordinateSystem.LOCAL_ARUCO) -> None:
-        self.points: List[WeedPoint] = []
+        self.points: list[WeedPoint] = []
         self.coord_system = coord_system
 
     def add_points(self, pts: Iterable[WeedPoint]) -> None:
@@ -59,14 +58,14 @@ class MapEngine:
         self,
         projector: ProjectionStrategy,
         settings: MapSettings,
-        heatmap: Optional[HeatmapAlgorithm] = None,
+        heatmap: HeatmapAlgorithm | None = None,
     ) -> None:
         self.projector = projector
         self.settings = settings
         self.heatmap_algo: HeatmapAlgorithm = heatmap if heatmap is not None else CountHeatmap()
         self.weed_map = WeedMap()
         self._is_locked: bool = False
-        self._current_grid: Optional[HeatmapGrid] = None
+        self._current_grid: HeatmapGrid | None = None
 
     def is_locked(self) -> bool:
         """Return True if mapping engine is locked due to missing georeferencing."""
@@ -78,7 +77,7 @@ class MapEngine:
         self._is_locked = False
         self._current_grid = None
 
-    def ingest_frame(self, payload: FramePayload) -> List[WeedPoint]:
+    def ingest_frame(self, payload: FramePayload) -> list[WeedPoint]:
         """Project detected weeds on frame and ingest them into WeedMap layer.
         
         Raises:
@@ -93,7 +92,7 @@ class MapEngine:
         assert payload.pose is not None
         projected_detections = self.projector.project(payload)
 
-        new_points: List[WeedPoint] = []
+        new_points: list[WeedPoint] = []
         for det in projected_detections:
             if det.world_x is None or det.world_y is None:
                 continue
@@ -111,10 +110,10 @@ class MapEngine:
         self.weed_map.add_points(new_points)
         return new_points
 
-    def ingest_summary(self, summary: SummaryDetections) -> List[WeedPoint]:
+    def ingest_summary(self, summary: SummaryDetections) -> list[WeedPoint]:
         """Ingest aggregated detections summary returned by onboard computer (GET /runs/{id}/data?type=summary)."""
         payloads = summary_to_frame_payloads(summary)
-        all_new_points: List[WeedPoint] = []
+        all_new_points: list[WeedPoint] = []
 
         for p in payloads:
             if not p.has_georef():
@@ -140,7 +139,7 @@ class MapEngine:
         self.weed_map.add_points(all_new_points)
         return all_new_points
 
-    def build_heatmap(self, cell_m: Optional[float] = None) -> HeatmapGrid:
+    def build_heatmap(self, cell_m: float | None = None) -> HeatmapGrid:
         """Compute raster weed density heatmap using configured algorithm."""
         cell_size = cell_m if cell_m is not None else self.settings.heatmap_cell_m
         bounds = self.weed_map.bounds()

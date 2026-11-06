@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 from PySide6.QtWidgets import QDialogButtonBox
 
@@ -96,3 +97,22 @@ def test_settings_dialog_validation_blocks_ok(sample_settings, qtbot):
     dialog.spin_poll_hz.setValue(0.2)
     assert not ok_btn.isEnabled()
     assert dialog.lbl_error.isVisible()
+
+
+def test_settings_dialog_browse_model_auto_resolves_classes(sample_settings, tmp_path, monkeypatch, qtbot):
+    dialog = SettingsDialog(sample_settings)
+    qtbot.addWidget(dialog)
+
+    model_file = tmp_path / "custom_yolo.onnx"
+    model_file.touch()
+    classes_file = tmp_path / "custom_yolo.json"
+    classes_file.write_text('{"0": "Corn"}')
+
+    from PySide6.QtWidgets import QFileDialog
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args, **kwargs: (str(model_file), "ONNX models (*.onnx)"))
+
+    dialog._browse_model()
+
+    assert dialog.edit_model_path.text() == str(model_file)
+    assert dialog.edit_classes_path.text() == str(classes_file)

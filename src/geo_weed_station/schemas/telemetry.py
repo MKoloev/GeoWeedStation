@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -44,10 +44,10 @@ class DroneStatus(BaseModel):
     flight_state: FlightState
     current_wp_index: int
     total_waypoints: int
-    current_pose: Optional[DronePose] = None
+    current_pose: DronePose | None = None
     captures_count: int
     is_data_ready: bool
-    active_run_id: Optional[str] = None
+    active_run_id: str | None = None
 
 
 class ConnectionState(str, Enum):

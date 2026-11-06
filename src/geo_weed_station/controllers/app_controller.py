@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
+
 from PySide6.QtCore import QObject, QSettings
 from PySide6.QtWidgets import QDialog
 
@@ -28,9 +29,9 @@ class AppController(QObject):
 
     def __init__(
         self,
-        settings: Optional[AppSettings] = None,
-        detector_factory: Optional[Callable[[], BaseDetector]] = None,
-        parent: Optional[QObject] = None,
+        settings: AppSettings | None = None,
+        detector_factory: Callable[[], BaseDetector] | None = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self.settings = settings or get_settings()
@@ -109,4 +110,5 @@ class AppController(QObject):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.settings = dialog.result_settings()
             self.map_engine.settings = self.settings.map
+            self.offline_controller.apply_settings(self.settings)
             self.window.status_bar_panel.set_message("Настройки успешно применены")

@@ -5,16 +5,16 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Dict, Tuple
+
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from geo_weed_station.core.map_engine.weed_map import WeedMap
 from geo_weed_station.schemas.entities import CoordinateSystem
 from geo_weed_station.schemas.map_models import HeatmapGrid, PngExportOptions
 
 # Class colors for vector markers on map (RGB)
-_CLASS_COLORS: Dict[str, Tuple[int, int, int]] = {
+_CLASS_COLORS: dict[str, tuple[int, int, int]] = {
     "weed_dicot": (230, 40, 40),      # Bright Red
     "weed_monocot": (40, 120, 240),   # Bright Blue
 }
@@ -138,7 +138,7 @@ class MapExporter:
         b_h = max(0.01, bounds.height)
 
         # Coordinate to pixel transform
-        def to_px(x: float, y: float) -> Tuple[int, int]:
+        def to_px(x: float, y: float) -> tuple[int, int]:
             px = int(margin + ((x - bounds.min_x) / b_w) * plot_w)
             py = int(margin + ((bounds.max_y - y) / b_h) * plot_h)
             return px, py

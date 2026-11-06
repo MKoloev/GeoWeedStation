@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
-from PySide6.QtCore import QItemSelection, Qt, Signal
+from collections.abc import Sequence
+
+from PySide6.QtCore import QItemSelection, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -30,7 +31,7 @@ class FileListPanel(QWidget):
     file_selected = Signal(int)  # Emitted with row index when user selects an item
     process_requested = Signal()  # Emitted when user clicks 'Start Processing'
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._model = FileTableModel(self)
 
@@ -99,14 +100,14 @@ class FileListPanel(QWidget):
         """Update entire file entry at row."""
         self._model.update_entry(row, entry)
 
-    def selected_row(self) -> Optional[int]:
+    def selected_row(self) -> int | None:
         """Return currently selected row index or None."""
         selection = self.table_view.selectionModel().selectedRows()
         if selection:
             return selection[0].row()
         return None
 
-    def selected_entry(self) -> Optional[FileEntry]:
+    def selected_entry(self) -> FileEntry | None:
         """Return currently selected FileEntry or None."""
         row = self.selected_row()
         if row is not None:

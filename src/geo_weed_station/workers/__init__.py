@@ -10,14 +10,14 @@ from geo_weed_station.workers.video_worker import VideoWorker
 from geo_weed_station.workers.xmp_index_task import XmpIndexTask, start_xmp_indexing
 
 __all__ = [
-    "ManagedWorker",
-    "start_in_thread",
-    "TelemetryWorker",
+    "BatchImageWorker",
     "CommandWorker",
     "DownloadWorker",
-    "BatchImageWorker",
-    "VideoWorker",
     "FrameQueue",
+    "ManagedWorker",
+    "TelemetryWorker",
+    "VideoWorker",
     "XmpIndexTask",
+    "start_in_thread",
     "start_xmp_indexing",
 ]

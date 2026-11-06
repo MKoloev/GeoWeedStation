@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
 from geo_weed_station.core.map_engine.weed_map import MapEngine
-from geo_weed_station.schemas.map_models import HeatmapGrid, MapStatistics
+from geo_weed_station.schemas.map_models import MapStatistics
 from geo_weed_station.schemas.onboard_api import SummaryDetections
 from geo_weed_station.schemas.payload import FramePayload
 
@@ -24,7 +24,7 @@ class MapController(QObject):
     statistics_changed = Signal(MapStatistics)
     map_locked_changed = Signal(bool, str)
 
-    def __init__(self, engine: MapEngine, parent: Optional[QObject] = None) -> None:
+    def __init__(self, engine: MapEngine, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._engine = engine
 

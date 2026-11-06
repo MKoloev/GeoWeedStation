@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Optional
+
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QDialog
 
@@ -15,7 +14,6 @@ from geo_weed_station.schemas.entities import CoordinateSystem
 from geo_weed_station.ui.dialogs.export_dialog import (
     ExportDialog,
     ExportFormat,
-    ExportRequest,
 )
 from geo_weed_station.ui.main_window import MainWindow
 
@@ -33,7 +31,7 @@ class ExportController(QObject):
         window: MainWindow,
         map_ctrl: MapController,
         settings: AppSettings,
-        parent: Optional[QObject] = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._window = window

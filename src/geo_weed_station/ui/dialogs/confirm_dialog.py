@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from geo_weed_station.schemas.onboard_api import StopAction
@@ -24,7 +24,7 @@ class ConfirmDialog:
     """Static utility methods showing confirmation dialogs with clear consequences."""
 
     @staticmethod
-    def confirm_delete_run(run_id: str, size_bytes: int, parent: Optional[QWidget] = None) -> bool:
+    def confirm_delete_run(run_id: str, size_bytes: int, parent: QWidget | None = None) -> bool:
         """Ask user confirmation before deleting a mission run from onboard drone storage."""
         size_str = _format_size(size_bytes)
         text = (
@@ -42,7 +42,7 @@ class ConfirmDialog:
         return res == QMessageBox.StandardButton.Yes
 
     @staticmethod
-    def confirm_abort(action: StopAction, parent: Optional[QWidget] = None) -> bool:
+    def confirm_abort(action: StopAction, parent: QWidget | None = None) -> bool:
         """Ask user confirmation before issuing an emergency flight abort command."""
         if action == StopAction.LAND:
             act_desc = "немедленную экстренную посадку (Land)"

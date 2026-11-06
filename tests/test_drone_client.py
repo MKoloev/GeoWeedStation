@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
+
 import pytest
 import requests
 from requests.adapters import BaseAdapter
@@ -12,7 +13,6 @@ from requests.models import Response
 
 from geo_weed_station.network.drone_client import DroneClient
 from geo_weed_station.network.exceptions import (
-    DroneApiError,
     DroneConflictError,
     DroneConnectionError,
     DroneNotFoundError,

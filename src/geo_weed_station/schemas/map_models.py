@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Tuple
+from typing import Any, Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from geo_weed_station.schemas.entities import CoordinateSystem
@@ -49,7 +50,7 @@ class HeatmapGrid(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
-    origin: Tuple[float, float]  # (min_x, min_y) bottom-left coordinate
+    origin: tuple[float, float]  # (min_x, min_y) bottom-left coordinate
     cell_size_m: float
     bounds: Bounds
     matrix: Any = Field(default=None, exclude=True)  # np.ndarray (rows, cols), excluded from JSON serialization
@@ -61,7 +62,7 @@ class MapStatistics(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     total_weeds: int
-    by_class: Dict[str, int]
+    by_class: dict[str, int]
     surveyed_area_m2: float
     mean_density_per_m2: float
     critical_area_percent: float
@@ -77,4 +78,4 @@ class PngExportOptions(BaseModel):
     show_legend: bool = True
     show_scalebar: bool = True
     dpi: int = 300
-    orthophoto_path: Optional[Path] = None
+    orthophoto_path: Path | None = None

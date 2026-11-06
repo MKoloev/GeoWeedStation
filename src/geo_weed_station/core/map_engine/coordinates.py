@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Optional, Tuple
+
 import pyproj
 
 from geo_weed_station.core.map_engine.errors import OriginNotSetError
@@ -12,21 +12,21 @@ from geo_weed_station.core.map_engine.errors import OriginNotSetError
 class CoordinateConverter:
     """Handles projection between local flat metric space (local_aruco) and geographic WGS84."""
 
-    def __init__(self, wgs84_origin: Optional[Tuple[float, float]] = None) -> None:
+    def __init__(self, wgs84_origin: tuple[float, float] | None = None) -> None:
         """Initialize converter with an optional WGS84 reference origin.
         
         Args:
             wgs84_origin: Base reference point tuple (latitude_deg, longitude_deg).
         """
         self.wgs84_origin = wgs84_origin
-        self._proj: Optional[pyproj.Proj] = None
+        self._proj: pyproj.Proj | None = None
 
         if self.wgs84_origin is not None:
             lat0, lon0 = self.wgs84_origin
             # Azimuthal Equidistant projection provides millimeter accuracy around origin
             self._proj = pyproj.Proj(proj="aeqd", lat_0=lat0, lon_0=lon0, datum="WGS84")
 
-    def local_to_wgs84(self, x: float, y: float) -> Tuple[float, float]:
+    def local_to_wgs84(self, x: float, y: float) -> tuple[float, float]:
         """Convert local flat coordinates (x, y in meters) to global WGS84 (latitude, longitude in degrees).
         
         Raises:
@@ -39,7 +39,7 @@ class CoordinateConverter:
         lon, lat = self._proj(x, y, inverse=True)
         return float(lat), float(lon)
 
-    def wgs84_to_local(self, lat: float, lon: float) -> Tuple[float, float]:
+    def wgs84_to_local(self, lat: float, lon: float) -> tuple[float, float]:
         """Convert global WGS84 (latitude, longitude in degrees) to local flat coordinates (x, y in meters).
         
         Raises:
@@ -53,7 +53,7 @@ class CoordinateConverter:
         return float(x), float(y)
 
     @staticmethod
-    def rotate_by_yaw(dx: float, dy: float, yaw_deg: float) -> Tuple[float, float]:
+    def rotate_by_yaw(dx: float, dy: float, yaw_deg: float) -> tuple[float, float]:
         """Rotate camera displacement vector by yaw angle (clockwise from North/Forward).
         
         Args:

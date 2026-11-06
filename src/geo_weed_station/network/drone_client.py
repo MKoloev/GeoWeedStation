@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterator, List, Optional
+from collections.abc import Iterator
+from typing import Any
+
 import requests
 
 from geo_weed_station.network.exceptions import (
@@ -39,7 +41,7 @@ class DroneClient:
         host: str = "127.0.0.1",
         port: int = 8000,
         timeout_s: float = 2.0,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
     ) -> None:
         """Initialize client. timeout_s must be <= 2.0s per Non-Functional Requirements."""
         if base_url:
@@ -65,8 +67,8 @@ class DroneClient:
         self,
         method: str,
         path: str,
-        params: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         stream: bool = False,
     ) -> requests.Response:
         """Perform HTTP request with error handling and status code mapping."""
@@ -125,7 +127,7 @@ class DroneClient:
         resp = self._request("POST", "/stop", json_data=req_dto.model_dump())
         return StopResponse.model_validate(resp.json())
 
-    def list_runs(self) -> List[DroneRun]:
+    def list_runs(self) -> list[DroneRun]:
         """List all completed and active mission runs stored on drone (GET /runs)."""
         resp = self._request("GET", "/runs")
         raw_items = resp.json()

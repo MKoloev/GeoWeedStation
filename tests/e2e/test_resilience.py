@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
+
 import pytest
-from PySide6.QtCore import QSettings
 
 from geo_weed_station.config.settings import AppSettings
 from geo_weed_station.controllers.app_controller import AppController

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from geo_weed_station.schemas.entities import CoordinateSystem
 from geo_weed_station.schemas.map_models import MapStatistics, WeedPoint

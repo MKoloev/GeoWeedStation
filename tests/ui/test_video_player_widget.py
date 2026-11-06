@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import time
+
 import numpy as np
-import pytest
 
 from geo_weed_station.schemas.entities import BBox, DetectedWeed
-from geo_weed_station.ui.widgets.detection_filter_panel import DetectionFilterState
 from geo_weed_station.ui.widgets.video_player_widget import VideoPlayerWidget
 
 

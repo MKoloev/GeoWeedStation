@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import time
-import pytest
 
 from geo_weed_station.network.download_manager import DownloadManager
 from geo_weed_station.network.drone_client import DroneClient

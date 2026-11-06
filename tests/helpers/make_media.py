@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import struct
-from typing import Optional
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -12,7 +11,7 @@ import numpy as np
 _XMP_JPEG_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
 
 
-def make_real_jpeg(path: Path, xmp_xml: Optional[str] = None, size=(64, 48), seed: int = 0) -> Path:
+def make_real_jpeg(path: Path, xmp_xml: str | None = None, size=(64, 48), seed: int = 0) -> Path:
     """Write a decodable JPEG; if xmp_xml given, insert an APP1 XMP segment after SOI."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

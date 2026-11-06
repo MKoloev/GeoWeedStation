@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QProgressBar,
     QVBoxLayout,
@@ -46,7 +44,7 @@ STATE_RUSSIAN_LABELS = {
 class TelemetryPanel(QWidget):
     """Panel showing live drone flight status, progress, 6-DOF coordinates and capture counters."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._init_ui()
 

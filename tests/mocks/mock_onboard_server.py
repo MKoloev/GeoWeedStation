@@ -9,13 +9,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import io
-from pathlib import Path
 import socket
 import sys
 import threading
 import time
-from typing import Dict, List, Literal, Optional
-import zipfile
+from pathlib import Path
+from typing import Literal
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT / "src") not in sys.path:
@@ -23,19 +22,18 @@ if str(_ROOT / "src") not in sys.path:
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import JSONResponse, Response as RawResponse, StreamingResponse
-from pydantic import BaseModel, Field
 import uvicorn
+from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import Response as RawResponse
+from pydantic import BaseModel
 
-from geo_weed_station.schemas.entities import CoordinateSystem
 from geo_weed_station.schemas.mission import Waypoint
 from geo_weed_station.schemas.onboard_api import (
     DeleteRunResponse,
     DroneRun,
     StartRequest,
     StartResponse,
-    StopAction,
     StopRequest,
     StopResponse,
     SummaryDetections,
@@ -70,7 +68,7 @@ class MockRunData:
         self,
         run_id: str,
         coordinate_system: str,
-        waypoints: List[Waypoint],
+        waypoints: list[Waypoint],
         start_time_iso: str,
     ) -> None:
         self.run_id = run_id
@@ -78,9 +76,9 @@ class MockRunData:
         self.waypoints = waypoints
         self.start_time_iso = start_time_iso
         self.status = "in_progress"
-        self.images: Dict[int, bytes] = {}
-        self.summary: Optional[SummaryDetections] = None
-        self.zip_bytes: Optional[bytes] = None
+        self.images: dict[int, bytes] = {}
+        self.summary: SummaryDetections | None = None
+        self.zip_bytes: bytes | None = None
 
     def finalize(self, aborted: bool = False) -> None:
         self.status = "aborted" if aborted else "completed"
@@ -118,13 +116,13 @@ class MockRunData:
 class MockDroneState:
     """Thread-safe state machine emulating onboard drone control logic."""
 
-    def __init__(self, config: Optional[MockConfig] = None) -> None:
+    def __init__(self, config: MockConfig | None = None) -> None:
         self.lock = threading.Lock()
         self.config = config or MockConfig()
         self.flight_state: FlightState = FlightState.IDLE
         self.current_wp_index: int = 0
         self.total_waypoints: int = 0
-        self.current_pose: Optional[DronePose] = DronePose(
+        self.current_pose: DronePose | None = DronePose(
             x=0.0,
             y=0.0,
             z=0.0,
@@ -136,12 +134,12 @@ class MockDroneState:
         )
         self.captures_count: int = 0
         self.is_data_ready: bool = False
-        self.active_run_id: Optional[str] = None
+        self.active_run_id: str | None = None
         self._abort_requested: bool = False
-        self._active_waypoints: List[Waypoint] = []
+        self._active_waypoints: list[Waypoint] = []
         self._active_cs: str = "aruco_local"
 
-        self.runs: Dict[str, MockRunData] = {}
+        self.runs: dict[str, MockRunData] = {}
 
         if self.config.initial_runs > 0:
             self._create_initial_runs(self.config.initial_runs)
@@ -320,8 +318,8 @@ class MockDroneState:
 
 
 def create_app(
-    config: Optional[MockConfig] = None,
-    state: Optional[MockDroneState] = None,
+    config: MockConfig | None = None,
+    state: MockDroneState | None = None,
 ) -> FastAPI:
     """Create FastAPI application with onboard drone endpoints and fault injection."""
     cfg = config or MockConfig()
@@ -360,8 +358,8 @@ def create_app(
     def post_stop(req: StopRequest) -> StopResponse:
         return drone_state.stop(req)
 
-    @app.get("/runs", response_model=List[DroneRun])
-    def get_runs() -> List[DroneRun]:
+    @app.get("/runs", response_model=list[DroneRun])
+    def get_runs() -> list[DroneRun]:
         with drone_state.lock:
             return [run.to_drone_run() for run in drone_state.runs.values()]
 
@@ -369,7 +367,7 @@ def create_app(
     def get_run_data(
         run_id: str,
         type: str = Query(..., pattern="^(summary|archive|image)$"),
-        wp_index: Optional[int] = Query(None),
+        wp_index: int | None = Query(None),
     ):
         with drone_state.lock:
             run = drone_state.runs.get(run_id)
@@ -455,7 +453,7 @@ class MockServerHandle:
         self,
         server: uvicorn.Server,
         server_thread: threading.Thread,
-        ticker_thread: Optional[threading.Thread],
+        ticker_thread: threading.Thread | None,
         stop_event: threading.Event,
         host: str,
         port: int,
@@ -488,9 +486,9 @@ def _find_free_port() -> int:
 
 
 def run_in_thread(
-    config: Optional[MockConfig] = None,
+    config: MockConfig | None = None,
     port: int = 0,
-    state: Optional[MockDroneState] = None,
+    state: MockDroneState | None = None,
 ) -> MockServerHandle:
     """Launch mock onboard server in a background thread."""
     cfg = config or MockConfig()
@@ -525,7 +523,7 @@ def run_in_thread(
             raise RuntimeError("Mock server failed to start within timeout")
         time.sleep(0.02)
 
-    ticker_thread: Optional[threading.Thread] = None
+    ticker_thread: threading.Thread | None = None
     if cfg.tick_s > 0:
 
         def run_ticker() -> None:

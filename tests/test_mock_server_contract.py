@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import io
-import time
 import zipfile
+
 import pytest
 import requests
 
@@ -15,8 +15,6 @@ from geo_weed_station.schemas.onboard_api import (
     DroneRun,
     StartRequest,
     StartResponse,
-    StopAction,
-    StopRequest,
     StopResponse,
     SummaryDetections,
 )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QDialog
@@ -12,7 +11,13 @@ from geo_weed_station.controllers.export_controller import ExportController
 from geo_weed_station.controllers.map_controller import MapController
 from geo_weed_station.core.map_engine.projector import NadirProjector
 from geo_weed_station.core.map_engine.weed_map import MapEngine
-from geo_weed_station.schemas.entities import BBox, CameraSpatialPose, CoordinateSystem, DetectedWeed, SensorOptics
+from geo_weed_station.schemas.entities import (
+    BBox,
+    CameraSpatialPose,
+    CoordinateSystem,
+    DetectedWeed,
+    SensorOptics,
+)
 from geo_weed_station.schemas.payload import FramePayload
 from geo_weed_station.ui.dialogs.export_dialog import ExportDialog, ExportFormat, ExportRequest
 from geo_weed_station.ui.main_window import MainWindow

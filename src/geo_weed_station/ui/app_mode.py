@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional, Union
+
 from PySide6.QtCore import QObject, QSettings, Signal, Slot
 
 
@@ -23,9 +23,9 @@ class ModeManager(QObject):
 
     def __init__(
         self,
-        settings: Optional[QSettings] = None,
+        settings: QSettings | None = None,
         default: AppMode = AppMode.OFFLINE,
-        parent: Optional[QObject] = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._settings = settings
@@ -42,7 +42,7 @@ class ModeManager(QObject):
         return self._mode
 
     @Slot(object)
-    def set_mode(self, mode: Union[AppMode, str]) -> None:
+    def set_mode(self, mode: AppMode | str) -> None:
         """Switch mode; emits `mode_changed` only on real change."""
         new_mode = AppMode(mode)
         if new_mode == self._mode:

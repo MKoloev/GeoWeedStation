@@ -3,27 +3,30 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Optional
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QFileDialog
 
 from geo_weed_station.config.settings import AppSettings
 from geo_weed_station.controllers.map_controller import MapController
 from geo_weed_station.core.detector_base import BaseDetector
 from geo_weed_station.core.image_io import read_image
-from geo_weed_station.core.onnx_detector import OnnxDetector
+from geo_weed_station.core.onnx_detector import (
+    OnnxDetector,
+    get_models_dir,
+    resolve_classes_path,
+    scan_available_models,
+)
 from geo_weed_station.core.source_factory import (
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
     FolderSource,
-    ImageSource,
     load_image_payload,
-    scan_images,
 )
-from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.payload import FramePayload
-from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
+from geo_weed_station.schemas.session import FileEntry
 from geo_weed_station.ui.app_mode import AppMode
 from geo_weed_station.ui.main_window import (
     MAP_LOCKED_TEXT,
@@ -58,8 +61,8 @@ class OfflineController(QObject):
         window: MainWindow,
         map_ctrl: MapController,
         settings: AppSettings,
-        detector_factory: Optional[Callable[[], BaseDetector]] = None,
-        parent: Optional[QObject] = None,
+        detector_factory: Callable[[], BaseDetector] | None = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._window = window
@@ -76,16 +79,34 @@ class OfflineController(QObject):
         self.filter_panel = DetectionFilterPanel()
 
         # Active worker references
-        self._batch_worker: Optional[BatchImageWorker] = None
-        self._video_worker: Optional[VideoWorker] = None
-        self._current_source_folder: Optional[Path] = None
+        self._batch_worker: BatchImageWorker | None = None
+        self._video_worker: VideoWorker | None = None
+        self._current_source_folder: Path | None = None
 
         self._embed_widgets_in_ui()
         self._wire_signals()
+        self._init_models_in_ui()
 
     # -------------------------------------------------------------------------
     # Setup & Wiring
     # -------------------------------------------------------------------------
+    def _init_models_in_ui(self) -> None:
+        """Scan models directory, populate filter panel selector and pre-load classes."""
+        active_model = Path(self._settings.detector.model_path)
+        models_dir = get_models_dir(active_model)
+        available = scan_available_models(models_dir)
+        self.filter_panel.set_available_models(available, active=active_model)
+
+        classes_p = resolve_classes_path(active_model, self._settings.detector.classes_path)
+        if classes_p.is_file():
+            self.filter_panel.load_classes_from_file(classes_p)
+
+    def apply_settings(self, settings: AppSettings) -> None:
+        """Dynamically apply updated application settings and refresh model configuration."""
+        self._settings = settings
+        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+        self._init_models_in_ui()
+
     def _embed_widgets_in_ui(self) -> None:
         # Install content widgets into central tabs
         self._window.set_tab_widget(TAB_IMAGE, self.image_viewer)
@@ -108,14 +129,33 @@ class OfflineController(QObject):
         self.file_list_panel.file_selected.connect(self._on_file_selected)
         self.file_list_panel.process_requested.connect(self.start_batch)
 
-        # Filters
+        # Filters & Model selection
         self.filter_panel.filter_changed.connect(self.on_filter_changed)
+        self.filter_panel.model_changed.connect(self._on_model_changed)
 
         # Map synchronization
         self._map_ctrl.map_updated.connect(self._on_map_updated)
         self._map_ctrl.statistics_changed.connect(self.map_info_panel.set_statistics)
         self._map_ctrl.map_locked_changed.connect(self._on_map_locked_changed)
         self.map_canvas.weed_selected.connect(self._on_weed_selected)
+
+    def _on_model_changed(self, model_path: Path) -> None:
+        """Handle model switch: resolve classes, reconfigure factory and update UI filter checkboxes."""
+        classes_path = resolve_classes_path(model_path, self._settings.detector.classes_path)
+        logger.info("Switching detection model to %s with classes %s", model_path.name, classes_path.name)
+
+        updated_det = self._settings.detector.model_copy(
+            update={"model_path": model_path, "classes_path": classes_path}
+        )
+        self._settings = self._settings.model_copy(update={"detector": updated_det})
+        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+
+        if classes_path.is_file():
+            self.filter_panel.load_classes_from_file(classes_path)
+
+        self._window.status_bar_panel.set_message(
+            f"Модель детекции переключена: {model_path.name} (классы: {classes_path.name})"
+        )
 
     # -------------------------------------------------------------------------
     # Actions: Open single image, folder, video

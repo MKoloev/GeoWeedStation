@@ -5,8 +5,9 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from PIL import Image
+
 import pytest
+from PIL import Image
 
 from geo_weed_station.core.map_engine.exporter import MapExporter
 from geo_weed_station.core.map_engine.heatmap import CountHeatmap

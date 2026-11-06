@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import time
+
 import pytest
-from PySide6.QtCore import QSettings
 
 from geo_weed_station.config.settings import AppSettings
 from geo_weed_station.controllers.app_controller import AppController
 from geo_weed_station.core.mission_planner import PlannerParams
 from geo_weed_station.schemas.entities import CoordinateSystem, SensorOptics
-from geo_weed_station.schemas.mission import MissionMode, MissionTask, SavePolicy, Waypoint
-from geo_weed_station.schemas.telemetry import ConnectionState, FlightState
+from geo_weed_station.schemas.mission import MissionMode, MissionTask, SavePolicy
+from geo_weed_station.schemas.telemetry import FlightState
 from tests.mocks.mock_onboard_server import MockConfig, run_in_thread
 
 

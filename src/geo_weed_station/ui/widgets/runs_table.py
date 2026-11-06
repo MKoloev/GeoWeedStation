@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -43,9 +44,9 @@ class RunsTable(QWidget):
     delete_requested = Signal(str)  # run_id
     process_requested = Signal(str)  # run_id
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._runs: List[DroneRun] = []
+        self._runs: list[DroneRun] = []
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -127,7 +128,7 @@ class RunsTable(QWidget):
 
         self._update_buttons_state()
 
-    def selected_run_id(self) -> Optional[str]:
+    def selected_run_id(self) -> str | None:
         """Return run_id of currently selected row or None."""
         selected_items = self.table.selectedItems()
         if not selected_items:

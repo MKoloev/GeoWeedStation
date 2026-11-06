@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import io
-from pathlib import Path
 import zipfile
+from pathlib import Path
+
 import pytest
 
 from geo_weed_station.network.download_manager import DownloadManager

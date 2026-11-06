@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from geo_weed_station.schemas.entities import CoordinateSystem
-from geo_weed_station.schemas.mission import MissionMode, MissionTask, SavePolicy, Waypoint
+from geo_weed_station.schemas.mission import MissionTask, SavePolicy, Waypoint
 from geo_weed_station.schemas.onboard_api import StopAction
 from geo_weed_station.ui.widgets.mission_control import MissionControl
 

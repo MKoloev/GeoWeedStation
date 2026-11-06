@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import time
+
 import numpy as np
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import Qt
 
 from geo_weed_station.schemas.entities import CoordinateSystem
 from geo_weed_station.schemas.map_models import Bounds, HeatmapGrid, WeedPoint
 from geo_weed_station.schemas.mission import Waypoint
 from geo_weed_station.schemas.telemetry import DronePose
-from geo_weed_station.ui.widgets.map_canvas import LOCKED_DEFAULT_MESSAGE, MapCanvas
+from geo_weed_station.ui.widgets.map_canvas import MapCanvas
 
 
 def _make_sample_points(n: int = 100) -> list[WeedPoint]:

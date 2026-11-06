@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import math
-from typing import Dict, List, Optional, Protocol, Tuple, Type
+from abc import ABC, abstractmethod
+from typing import Protocol
 
 from geo_weed_station.core.map_engine.coordinates import CoordinateConverter
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
@@ -15,7 +15,7 @@ from geo_weed_station.schemas.payload import FramePayload
 class DistortionModel(Protocol):
     """Extension point protocol for camera optical distortion models."""
 
-    def undistort_point(self, x_px: float, y_px: float) -> Tuple[float, float]:
+    def undistort_point(self, x_px: float, y_px: float) -> tuple[float, float]:
         """Apply inverse lens distortion to pixel coordinates."""
         ...
 
@@ -38,7 +38,7 @@ class ProjectionStrategy(ABC):
     """Abstract Strategy interface for projecting camera pixel coordinates into field planes."""
 
     @abstractmethod
-    def project(self, payload: FramePayload) -> List[DetectedWeed]:
+    def project(self, payload: FramePayload) -> list[DetectedWeed]:
         """Project detected weeds of a frame to world metric or geographic coordinates.
         
         Args:
@@ -52,15 +52,15 @@ class ProjectionStrategy(ABC):
 class NadirProjector(ProjectionStrategy):
     """Nadir (downward-looking, pitch ≈ -90°) pinhole perspective projector."""
 
-    def __init__(self, distortion: Optional[DistortionModel] = None) -> None:
+    def __init__(self, distortion: DistortionModel | None = None) -> None:
         self.distortion = distortion
 
     @staticmethod
     def ground_footprint_m(
-        optics: Optional[SensorOptics],
+        optics: SensorOptics | None,
         altitude_m: float,
-        image_size_px: Tuple[int, int],
-    ) -> Tuple[float, float]:
+        image_size_px: tuple[int, int],
+    ) -> tuple[float, float]:
         """Calculate the physical ground footprint (width_m, height_m) of a frame at given altitude.
         
         Args:
@@ -94,7 +94,7 @@ class NadirProjector(ProjectionStrategy):
         h_m = w_m * (img_h / img_w)
         return max(0.01, w_m), max(0.01, h_m)
 
-    def project(self, payload: FramePayload) -> List[DetectedWeed]:
+    def project(self, payload: FramePayload) -> list[DetectedWeed]:
         """Project detected weeds to world coordinates (meters in local_aruco or lat/lon in wgs84).
         
         Raises:
@@ -115,8 +115,8 @@ class NadirProjector(ProjectionStrategy):
         if has_pp:
             pp_x, pp_y = payload.optics.principal_point_px  # type: ignore
 
-        projected_weeds: List[DetectedWeed] = []
-        wgs84_conv: Optional[CoordinateConverter] = None
+        projected_weeds: list[DetectedWeed] = []
+        wgs84_conv: CoordinateConverter | None = None
 
         if pose.coordinate_system == CoordinateSystem.WGS84:
             # Create local tangent converter centered at camera GPS position (lat, lon)
@@ -164,12 +164,12 @@ class NadirProjector(ProjectionStrategy):
         return projected_weeds
 
 
-_PROJECTOR_REGISTRY: Dict[str, Type[ProjectionStrategy]] = {
+_PROJECTOR_REGISTRY: dict[str, type[ProjectionStrategy]] = {
     "nadir": NadirProjector,
 }
 
 
-def register_projector(name: str, strategy_cls: Type[ProjectionStrategy]) -> None:
+def register_projector(name: str, strategy_cls: type[ProjectionStrategy]) -> None:
     """Register a new projection strategy dynamically without modifying existing code."""
     _PROJECTOR_REGISTRY[name.lower()] = strategy_cls
 

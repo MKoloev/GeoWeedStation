@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
 import logging
+from enum import Enum
 from pathlib import Path
-from typing import Optional, Set
+
 from pydantic import BaseModel, ConfigDict, Field
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -44,10 +44,10 @@ class ExportRequest(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    formats: Set[ExportFormat] = Field(..., min_length=1)
+    formats: set[ExportFormat] = Field(..., min_length=1)
     target_dir: Path
     base_name: str
-    png_options: Optional[PngExportOptions] = None
+    png_options: PngExportOptions | None = None
 
 
 class ExportDialog(QDialog):
@@ -57,8 +57,8 @@ class ExportDialog(QDialog):
         self,
         coord_system: CoordinateSystem = CoordinateSystem.LOCAL_ARUCO,
         has_orthophoto: bool = False,
-        default_dir: Optional[Path] = None,
-        parent: Optional[QWidget] = None,
+        default_dir: Path | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Экспорт результатов картографирования")
@@ -67,7 +67,7 @@ class ExportDialog(QDialog):
         self._coord_system = coord_system
         self._has_orthophoto = has_orthophoto
         self._target_dir = default_dir or Path.cwd()
-        self._result_request: Optional[ExportRequest] = None
+        self._result_request: ExportRequest | None = None
 
         self._init_ui()
         self._validate_inputs()
@@ -234,7 +234,7 @@ class ExportDialog(QDialog):
         if not self._validate_inputs():
             return
 
-        formats: Set[ExportFormat] = set()
+        formats: set[ExportFormat] = set()
         if self.cb_csv.isChecked():
             formats.add(ExportFormat.CSV)
         if self.cb_geojson.isChecked():
@@ -242,7 +242,7 @@ class ExportDialog(QDialog):
         if self.cb_png.isChecked():
             formats.add(ExportFormat.PNG)
 
-        png_opts: Optional[PngExportOptions] = None
+        png_opts: PngExportOptions | None = None
         if ExportFormat.PNG in formats:
             png_opts = PngExportOptions(
                 background=self.combo_bg.currentData(),

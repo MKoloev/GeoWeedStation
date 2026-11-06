@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from geo_weed_station.schemas.entities import CameraSpatialPose, DetectedWeed, SensorOptics
@@ -14,12 +15,12 @@ class FramePayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     frame_id: str
-    source_path: Optional[str] = None
-    image_size_px: Tuple[int, int]  # (width, height)
-    image: Optional[Any] = Field(default=None, exclude=True)  # In-memory image buffer, excluded from serialization
-    pose: Optional[CameraSpatialPose] = None
-    optics: Optional[SensorOptics] = None
-    detections: List[DetectedWeed] = Field(default_factory=list)
+    source_path: str | None = None
+    image_size_px: tuple[int, int]  # (width, height)
+    image: Any | None = Field(default=None, exclude=True)  # In-memory image buffer, excluded from serialization
+    pose: CameraSpatialPose | None = None
+    optics: SensorOptics | None = None
+    detections: list[DetectedWeed] = Field(default_factory=list)
 
     def has_georef(self) -> bool:
         """Check if frame contains valid georeferencing tags for mapping projection.

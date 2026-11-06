@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from geo_weed_station.schemas import (
     BBox,
     CameraSpatialPose,
-    ConnectionState,
     CoordinateSystem,
     DeleteRunResponse,
     DetectedWeed,
-    DronePose,
     DroneRun,
     DroneStatus,
     FlightState,
@@ -23,15 +22,10 @@ from geo_weed_station.schemas import (
     MissionMode,
     MissionTask,
     SavePolicy,
-    SensorOptics,
     StartRequest,
     StartResponse,
-    StopAction,
-    StopRequest,
     StopResponse,
-    SummaryDetection,
     SummaryDetections,
-    SummaryItem,
     Waypoint,
     mission_to_start_request,
     summary_to_frame_payloads,

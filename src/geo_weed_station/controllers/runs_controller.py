@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Optional
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from geo_weed_station.config.settings import AppSettings
@@ -36,10 +37,10 @@ class RunsController(QObject):
         window: MainWindow,
         map_ctrl: MapController,
         settings: AppSettings,
-        client_getter: Callable[[], Optional[DroneClient]],
-        command_worker_getter: Callable[[], Optional[CommandWorker]],
-        detector_factory: Optional[Callable[[], BaseDetector]] = None,
-        parent: Optional[QObject] = None,
+        client_getter: Callable[[], DroneClient | None],
+        command_worker_getter: Callable[[], CommandWorker | None],
+        detector_factory: Callable[[], BaseDetector] | None = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._window = window
@@ -50,8 +51,8 @@ class RunsController(QObject):
         self._detector_factory = detector_factory
 
         self.runs_table = RunsTable()
-        self._download_worker: Optional[DownloadWorker] = None
-        self._batch_worker: Optional[BatchImageWorker] = None
+        self._download_worker: DownloadWorker | None = None
+        self._batch_worker: BatchImageWorker | None = None
         self._runs_cache: dict[str, DroneRun] = {}
 
         self._embed_widgets_in_ui()
@@ -167,7 +168,7 @@ class RunsController(QObject):
     # -------------------------------------------------------------------------
     # Callbacks
     # -------------------------------------------------------------------------
-    def _on_runs_loaded(self, runs: List[DroneRun]) -> None:
+    def _on_runs_loaded(self, runs: list[DroneRun]) -> None:
         self._runs_cache = {r.run_id: r for r in runs}
         self.runs_table.set_runs(runs)
         self.runs_updated.emit(runs)

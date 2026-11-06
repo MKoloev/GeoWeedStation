@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
-import numpy as np
 
+import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPixmap
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -30,7 +27,7 @@ logger = logging.getLogger(__name__)
 class MapInfoPanel(QWidget):
     """Panel showing aggregated field metrics and inspection popup for a clicked weed point."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._init_ui()
 
@@ -133,7 +130,7 @@ class MapInfoPanel(QWidget):
             self.table_classes.setItem(row, 0, item_name)
             self.table_classes.setItem(row, 1, item_count)
 
-    def show_point(self, point: WeedPoint, thumbnail: Optional[np.ndarray] = None) -> None:
+    def show_point(self, point: WeedPoint, thumbnail: np.ndarray | None = None) -> None:
         """Display inspector details and thumbnail for the selected weed point."""
         self.point_group.setVisible(True)
         self.lbl_point_id.setText(point.weed_id)

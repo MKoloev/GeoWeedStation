@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
+
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from geo_weed_station.config.settings import AppSettings
 from geo_weed_station.controllers.map_controller import MapController
 from geo_weed_station.core.mission_planner import generate_waypoints
 from geo_weed_station.network.drone_client import DroneClient
-from geo_weed_station.schemas.mission import MissionTask, Waypoint
+from geo_weed_station.schemas.mission import MissionTask
 from geo_weed_station.schemas.onboard_api import (
     StartResponse,
     StopAction,
@@ -20,14 +20,12 @@ from geo_weed_station.schemas.onboard_api import (
 )
 from geo_weed_station.schemas.telemetry import (
     ConnectionState,
-    DronePose,
     DroneStatus,
     FlightState,
 )
 from geo_weed_station.ui.app_mode import AppMode
 from geo_weed_station.ui.dialogs.confirm_dialog import ConfirmDialog
 from geo_weed_station.ui.main_window import (
-    TAB_MAP,
     TAB_MISSION,
     MainWindow,
 )
@@ -53,7 +51,7 @@ class OnlineController(QObject):
         map_ctrl: MapController,
         settings: AppSettings,
         map_canvas: MapCanvas,
-        parent: Optional[QObject] = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._window = window
@@ -66,15 +64,15 @@ class OnlineController(QObject):
         self.mission_control = MissionControl()
 
         # Network client and workers
-        self._client: Optional[DroneClient] = None
-        self._telemetry_worker: Optional[TelemetryWorker] = None
-        self._command_worker: Optional[CommandWorker] = None
-        self._telemetry_thread: Optional[QThread] = None
-        self._command_thread: Optional[QThread] = None
+        self._client: DroneClient | None = None
+        self._telemetry_worker: TelemetryWorker | None = None
+        self._command_worker: CommandWorker | None = None
+        self._telemetry_thread: QThread | None = None
+        self._command_thread: QThread | None = None
 
-        self._last_status: Optional[DroneStatus] = None
-        self._flight_start_time: Optional[float] = None
-        self._active_run_id: Optional[str] = None
+        self._last_status: DroneStatus | None = None
+        self._flight_start_time: float | None = None
+        self._active_run_id: str | None = None
         self._summary_requested: bool = False
 
         self._embed_widgets_in_ui()

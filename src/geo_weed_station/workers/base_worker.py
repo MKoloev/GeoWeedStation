@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional
-from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
+
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 
 
 class ManagedWorker(QObject):
@@ -14,7 +14,7 @@ class ManagedWorker(QObject):
     finished = Signal()
     failed = Signal(str)
 
-    def __init__(self, parent: Optional[QObject] = None) -> None:
+    def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._is_paused = threading.Event()
         self._stop_event = threading.Event()

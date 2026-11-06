@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import pytest
 from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtWidgets import QMessageBox

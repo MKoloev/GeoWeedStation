@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import pytest
-from PySide6.QtCore import QSettings
 
 from geo_weed_station.config.settings import AppSettings
 from geo_weed_station.controllers.app_controller import AppController
 from geo_weed_station.core.detector_base import BaseDetector
 from geo_weed_station.core.source_factory import FolderSource
 from geo_weed_station.schemas.entities import BBox, DetectedWeed
-from tests.helpers.dataset_factory import make_dataset, make_geotagged_jpeg
+from tests.helpers.dataset_factory import make_dataset
 
 
 class MockOfflineDetector(BaseDetector):

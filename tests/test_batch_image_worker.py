@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
 import time
-from typing import List
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -25,13 +24,13 @@ from tests.helpers.make_xmp_image import SAMPLE_XMP_LOCAL_ARUCO
 
 
 class FakeDetector(BaseDetector):
-    instances: List["FakeDetector"] = []
+    instances: list[FakeDetector] = []
 
     def __init__(self, delay: float = 0.0) -> None:
         self._loaded = False
         self.closed = False
         self.delay = delay
-        self.threads: List[int] = []
+        self.threads: list[int] = []
         FakeDetector.instances.append(self)
 
     def load(self) -> None:

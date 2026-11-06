@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import struct
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-import struct
-from typing import Dict, Optional, Tuple
-import xml.etree.ElementTree as ET
 
 from geo_weed_station.core.exceptions import (
     XmpError,
@@ -28,9 +27,9 @@ _XMP_JPEG_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
 class XmpSpatialData:
     """Parsed spatial and optical metadata container from XMP packet."""
 
-    pose: Optional[CameraSpatialPose]
-    optics: Optional[SensorOptics]
-    raw_tags: Dict[str, str]
+    pose: CameraSpatialPose | None
+    optics: SensorOptics | None
+    raw_tags: dict[str, str]
 
     @property
     def has_spatial_data(self) -> bool:
@@ -193,7 +192,7 @@ def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
     except ET.ParseError as e:
         raise XmpMalformedError(f"Malformed XMP XML: {e}") from e
 
-    raw_tags: Dict[str, str] = {}
+    raw_tags: dict[str, str] = {}
 
     # Traverse all elements to collect tags (ignoring XML namespace prefixes)
     for elem in root.iter():
@@ -236,7 +235,7 @@ def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
             alt_valid = False
 
     # 3. Determine Coordinate System and Coordinates
-    pose: Optional[CameraSpatialPose] = None
+    pose: CameraSpatialPose | None = None
     cs_tag = raw_tags.get("CoordinateSystem", "").lower()
 
     if angles_valid and alt_valid:
@@ -287,12 +286,12 @@ def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
                 )
 
     # 4. Parse Optics parameters
-    optics: Optional[SensorOptics] = None
+    optics: SensorOptics | None = None
     focal_val = raw_tags.get("PerspectiveFocalLength")
     if focal_val is not None:
         try:
             focal_length_mm = float(focal_val)
-            principal_point: Optional[Tuple[float, float]] = None
+            principal_point: tuple[float, float] | None = None
             pp_val = raw_tags.get("PrincipalPoint")
             if pp_val:
                 parts = pp_val.split(",")
@@ -334,15 +333,15 @@ def has_xmp(path: Path) -> bool:
         return False
 
 
-def build_frame_payload(path: Path, image_size_px: Tuple[int, int]) -> FramePayload:
+def build_frame_payload(path: Path, image_size_px: tuple[int, int]) -> FramePayload:
     """Construct a FramePayload from image file.
     
     If XMP is missing or corrupted, returns FramePayload with pose=None.
     Does not crash or raise exceptions on missing metadata.
     """
     path = Path(path)
-    pose: Optional[CameraSpatialPose] = None
-    optics: Optional[SensorOptics] = None
+    pose: CameraSpatialPose | None = None
+    optics: SensorOptics | None = None
 
     try:
         spatial_data = extract_spatial_data(path)

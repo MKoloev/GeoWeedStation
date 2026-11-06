@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List
+
 import numpy as np
 
 from geo_weed_station.schemas.entities import DetectedWeed
@@ -17,7 +17,7 @@ class BaseDetector(ABC):
         """Load detector model weights into execution session."""
 
     @abstractmethod
-    def detect(self, image: np.ndarray) -> List[DetectedWeed]:
+    def detect(self, image: np.ndarray) -> list[DetectedWeed]:
         """Perform object detection on an image array.
         
         Args:

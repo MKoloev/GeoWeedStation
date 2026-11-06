@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+
 import pytest
 
 from geo_weed_station.core.xmp_parser import extract_spatial_data
@@ -14,7 +15,6 @@ from geo_weed_station.network.exceptions import (
     DroneApiError,
     DroneConflictError,
     DroneConnectionError,
-    DroneNotFoundError,
     DroneTimeoutError,
 )
 from geo_weed_station.schemas.mission import Waypoint

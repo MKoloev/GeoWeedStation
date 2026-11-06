@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
+
 import pytest
 
 # Ensure Qt runs offscreen during testing if no display is available

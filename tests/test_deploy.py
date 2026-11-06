@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import sys
-import pytest
+from pathlib import Path
 
 from deploy.build_app import collect_data_files
 from main import parse_args, run_selftest

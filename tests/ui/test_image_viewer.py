@@ -12,7 +12,7 @@ from geo_weed_station.ui.widgets.detection_filter_panel import (
     DetectionFilterPanel,
     DetectionFilterState,
 )
-from geo_weed_station.ui.widgets.image_viewer import DetectionGraphicsItem, ImageViewer
+from geo_weed_station.ui.widgets.image_viewer import ImageViewer
 
 
 def _dummy_image(w: int = 640, h: int = 480) -> np.ndarray:
@@ -172,6 +172,35 @@ def test_detection_filter_panel_signals(qtbot):
     item = panel._list_classes.item(0)
     item.setCheckState(Qt.CheckState.Unchecked)
     assert "Ambrosia" in emitted_states[-1].hidden_classes
+
+
+def test_detection_filter_panel_model_selector(tmp_path: Path, qtbot):
+    panel = DetectionFilterPanel()
+    qtbot.addWidget(panel)
+
+    m1 = tmp_path / "model1.onnx"
+    m2 = tmp_path / "model2.onnx"
+    m1.touch()
+    m2.touch()
+
+    # Model 1 has custom classes
+    c1 = tmp_path / "model1.json"
+    c1.write_text('{"0": "WeedA", "1": "WeedB"}', encoding="utf-8")
+
+    panel.set_available_models([m1, m2], active=m1)
+    panel.load_classes_from_file(c1)
+
+    assert panel._combo_model.count() == 2
+    assert panel.selected_model() == m1
+    assert panel._class_names == ["WeedA", "WeedB"]
+
+    switched_models = []
+    panel.model_changed.connect(switched_models.append)
+
+    # Switch to model 2
+    panel._combo_model.setCurrentIndex(1)
+    assert len(switched_models) == 1
+    assert switched_models[0] == m2
 
 
 def test_image_viewer_sanity_grab(qtbot):

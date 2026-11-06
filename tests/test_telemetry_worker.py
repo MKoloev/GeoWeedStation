@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import time
-import pytest
-from PySide6.QtCore import QThread
 
 from geo_weed_station.config.settings import NetworkSettings
 from geo_weed_station.network.drone_client import DroneClient
-from geo_weed_station.schemas.telemetry import ConnectionState, DroneStatus, FlightState
+from geo_weed_station.schemas.telemetry import ConnectionState, DroneStatus
 from geo_weed_station.workers.base_worker import start_in_thread
 from geo_weed_station.workers.telemetry_worker import TelemetryWorker
 from tests.mocks.mock_onboard_server import MockConfig, run_in_thread

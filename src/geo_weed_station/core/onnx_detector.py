@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+import sys
+
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -22,12 +24,12 @@ class LetterboxResult:
 
     tensor: np.ndarray  # Shape: (1, 3, target_h, target_w), dtype float32, normalized [0..1]
     scale: float
-    pad: Tuple[float, float]  # (pad_x, pad_y)
+    pad: tuple[float, float]  # (pad_x, pad_y)
 
 
 def letterbox(
     image: np.ndarray,
-    size: Tuple[int, int] = (640, 640),
+    size: tuple[int, int] = (640, 640),
     pad_color: int = 114,
 ) -> LetterboxResult:
     """Resize and pad image with preserved aspect ratio to target size (width, height).
@@ -73,7 +75,7 @@ def letterbox(
     return LetterboxResult(tensor=tensor, scale=scale, pad=(pad_x, pad_y))
 
 
-def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> List[int]:
+def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> list[int]:
     """Non-Maximum Suppression (NMS) on bounding boxes.
     
     Args:
@@ -94,7 +96,7 @@ def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> List[int]:
     areas = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
 
     order = scores.argsort()[::-1]
-    keep: List[int] = []
+    keep: list[int] = []
 
     while order.size > 0:
         i = order[0]
@@ -122,7 +124,7 @@ def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> List[int]:
     return keep
 
 
-def load_class_names(path: Path) -> Dict[int, str]:
+def load_class_names(path: Path) -> dict[int, str]:
     """Load class ID to class name mapping from JSON file."""
     path = Path(path)
     if not path.is_file():
@@ -131,7 +133,7 @@ def load_class_names(path: Path) -> Dict[int, str]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        classes: Dict[int, str] = {}
+        classes: dict[int, str] = {}
         for k, v in data.items():
             try:
                 classes[int(k)] = str(v)
@@ -142,25 +144,92 @@ def load_class_names(path: Path) -> Dict[int, str]:
         return {0: "weed_dicot", 1: "weed_monocot"}
 
 
+def resolve_classes_path(model_path: Path, fallback_classes_path: Path | None = None) -> Path:
+    """Find corresponding classes JSON file for a given model path.
+    
+    Checks in priority order:
+    1. <model_stem>.json next to model
+    2. <model_stem>_classes.json next to model
+    3. fallback_classes_path if existing
+    4. classes.json in model directory
+    """
+    model_path = Path(model_path)
+    model_dir = model_path.parent
+    stem = model_path.stem
+
+    candidate1 = model_dir / f"{stem}.json"
+    if candidate1.is_file():
+        return candidate1
+
+    candidate2 = model_dir / f"{stem}_classes.json"
+    if candidate2.is_file():
+        return candidate2
+
+    if fallback_classes_path is not None:
+        fb = Path(fallback_classes_path)
+        if fb.is_file():
+            return fb
+
+    candidate3 = model_dir / "classes.json"
+    if candidate3.is_file():
+        return candidate3
+
+    return fallback_classes_path or candidate1
+
+
+def get_models_dir(custom_path: Path | None = None) -> Path:
+    """Resolve the models directory robustly across PyInstaller bundle, source root, and CWD."""
+    if custom_path is not None:
+        p = Path(custom_path)
+        if p.is_dir():
+            return p.resolve()
+        if p.parent.is_dir():
+            return p.parent.resolve()
+
+    if hasattr(sys, "_MEIPASS"):
+        meipass_models = Path(sys._MEIPASS) / "models"
+        if meipass_models.is_dir():
+            return meipass_models.resolve()
+
+    pkg_models = Path(__file__).resolve().parent.parent.parent.parent / "models"
+    if pkg_models.is_dir():
+        return pkg_models.resolve()
+
+    cwd_models = Path.cwd() / "models"
+    if cwd_models.is_dir():
+        return cwd_models.resolve()
+
+    return pkg_models.resolve()
+
+
+def scan_available_models(directory: Path | None = None) -> list[Path]:
+    """Scan directory for valid .onnx model files in deterministic order."""
+    dir_path = get_models_dir(directory) if directory is None else Path(directory)
+    if not dir_path.is_dir():
+        return []
+    models = [p for p in dir_path.glob("*.onnx") if p.is_file()]
+    return sorted(models, key=lambda p: p.name.lower())
+
+
 class OnnxDetector(BaseDetector):
     """YOLO detector implementation running on ONNX Runtime."""
 
     def __init__(
         self,
         settings: DetectorSettings,
-        providers: Optional[Sequence[str]] = None,
+        providers: Sequence[str] | None = None,
     ) -> None:
         self.settings = settings
         self._custom_providers = list(providers) if providers is not None else None
-        self._session: Optional[ort.InferenceSession] = None
-        self._input_name: Optional[str] = None
-        self._output_names: List[str] = []
+        self._session: ort.InferenceSession | None = None
+        self._input_name: str | None = None
+        self._output_names: list[str] = []
         self._classes = load_class_names(self.settings.classes_path)
         self.confidence_threshold = float(self.settings.confidence_threshold)
         self.nms_iou_threshold = float(self.settings.nms_iou_threshold)
 
     @staticmethod
-    def available_providers() -> List[str]:
+    def available_providers() -> list[str]:
         """Return list of execution providers available in this ONNX Runtime environment."""
         return ort.get_available_providers()
 
@@ -219,7 +288,7 @@ class OnnxDetector(BaseDetector):
         self._input_name = None
         self._output_names = []
 
-    def detect(self, image: np.ndarray) -> List[DetectedWeed]:
+    def detect(self, image: np.ndarray) -> list[DetectedWeed]:
         """Run object detection on an RGB image array and return normalized weed detections."""
         if not self.is_loaded:
             self.load()
@@ -260,9 +329,9 @@ class OnnxDetector(BaseDetector):
         if num_features < 5:
             return []
 
-        boxes_xyxy_letterbox: List[List[float]] = []
-        confidences: List[float] = []
-        class_ids: List[int] = []
+        boxes_xyxy_letterbox: list[list[float]] = []
+        confidences: list[float] = []
+        class_ids: list[int] = []
 
         # Identify YOLO format (v8 vs v5)
         # In YOLOv8: cols 0..3 are cx, cy, w, h; cols 4.. are class logits
@@ -303,7 +372,7 @@ class OnnxDetector(BaseDetector):
         # Apply Non-Maximum Suppression
         keep_indices = nms(boxes_arr, scores_arr, self.nms_iou_threshold)
 
-        detected_weeds: List[DetectedWeed] = []
+        detected_weeds: list[DetectedWeed] = []
         for idx in keep_indices:
             bx1, by1, bx2, by2 = boxes_arr[idx]
             score = float(scores_arr[idx])

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import math
-from typing import Sequence
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
+
 import numpy as np
 from scipy.ndimage import gaussian_filter
 

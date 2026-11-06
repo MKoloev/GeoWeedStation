@@ -2,20 +2,13 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
 from PySide6.QtCore import Signal, Slot
 
 from geo_weed_station.network.drone_client import DroneClient
-from geo_weed_station.network.exceptions import DroneApiError, DroneConflictError, DroneConnectionError, DroneNotFoundError, DroneTimeoutError
 from geo_weed_station.schemas.mission import MissionTask
 from geo_weed_station.schemas.onboard_api import (
-    DeleteRunResponse,
-    DroneRun,
     StartRequest,
-    StartResponse,
     StopAction,
-    StopResponse,
-    SummaryDetections,
 )
 from geo_weed_station.workers.base_worker import ManagedWorker
 

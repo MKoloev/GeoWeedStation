@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Dict, List, Optional, Sequence, Tuple
-import numpy as np
+from collections.abc import Sequence
 
+import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
 from PySide6.QtGui import (
     QBrush,
@@ -55,7 +55,7 @@ class WeedGraphicsPointItem(QGraphicsEllipseItem):
         scene_y: float,
         color: QColor,
         radius: float = 3.5,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(scene_x - radius, scene_y - radius, radius * 2.0, radius * 2.0)
         self.point = point
@@ -80,7 +80,7 @@ class MapCanvas(QGraphicsView):
     MIN_ZOOM = 0.001
     MAX_ZOOM = 1000.0
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
@@ -91,14 +91,14 @@ class MapCanvas(QGraphicsView):
         self._current_zoom = 1.0
 
         # Layer containers
-        self._heatmap_item: Optional[QGraphicsPixmapItem] = None
-        self._route_group: Optional[QGraphicsItemGroup] = None
-        self._points_group: Optional[QGraphicsItemGroup] = None
-        self._drone_group: Optional[QGraphicsItemGroup] = None
-        self._locked_overlay: Optional[QGraphicsItemGroup] = None
+        self._heatmap_item: QGraphicsPixmapItem | None = None
+        self._route_group: QGraphicsItemGroup | None = None
+        self._points_group: QGraphicsItemGroup | None = None
+        self._drone_group: QGraphicsItemGroup | None = None
+        self._locked_overlay: QGraphicsItemGroup | None = None
 
-        self._points_list: List[WeedPoint] = []
-        self._point_items: Dict[str, WeedGraphicsPointItem] = {}
+        self._points_list: list[WeedPoint] = []
+        self._point_items: dict[str, WeedGraphicsPointItem] = {}
 
         self._setup_view()
 
@@ -129,7 +129,7 @@ class MapCanvas(QGraphicsView):
         """Switch coordinate system (local_aruco or wgs84)."""
         self._coord_system = cs
 
-    def set_locked(self, locked: bool, message: Optional[str] = None) -> None:
+    def set_locked(self, locked: bool, message: str | None = None) -> None:
         """Lock or unlock map canvas. When locked, layers are hidden and warning is shown."""
         self._locked = locked
         text = message or LOCKED_DEFAULT_MESSAGE
@@ -196,7 +196,7 @@ class MapCanvas(QGraphicsView):
             self._points_group.addToGroup(item)
             self._point_items[p.weed_id] = item
 
-    def set_heatmap(self, grid: Optional[HeatmapGrid]) -> None:
+    def set_heatmap(self, grid: HeatmapGrid | None) -> None:
         """Render density heatmap grid as semi-transparent raster overlay."""
         # Remove old heatmap
         if self._heatmap_item is not None:
@@ -298,7 +298,7 @@ class MapCanvas(QGraphicsView):
                 label.setFont(font)
                 label.setPos(wp.x + 3.0, -wp.y - 10.0)
 
-    def set_drone_pose(self, pose: Optional[DronePose]) -> None:
+    def set_drone_pose(self, pose: DronePose | None) -> None:
         """Render drone current position marker and optical heading vector (<= 100 ms latency)."""
         # Clear drone group
         for it in list(self._drone_group.childItems()):
@@ -367,7 +367,7 @@ class MapCanvas(QGraphicsView):
     # -------------------------------------------------------------------------
     # Events
     # -------------------------------------------------------------------------
-    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
+    def wheelEvent(self, event: QWheelEvent) -> None:
         angle = event.angleDelta().y()
         if angle == 0:
             return
@@ -382,7 +382,7 @@ class MapCanvas(QGraphicsView):
 
         event.accept()
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         item = self.itemAt(event.position().toPoint())
         if isinstance(item, WeedGraphicsPointItem):
             self.weed_selected.emit(item.point.weed_id)

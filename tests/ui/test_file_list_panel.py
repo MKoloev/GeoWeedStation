@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from PySide6.QtCore import Qt
 
 from geo_weed_station.schemas.session import FileEntry, ProcessingStatus

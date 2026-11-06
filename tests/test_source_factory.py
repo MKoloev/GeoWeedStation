@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -16,11 +15,10 @@ from geo_weed_station.core.source_factory import (
     SourceFactory,
     VideoSource,
 )
-from geo_weed_station.schemas.session import FileEntry
+from geo_weed_station.schemas.mission import Waypoint
 from tests.helpers.make_media import make_mp4, make_real_jpeg
 from tests.helpers.make_xmp_image import SAMPLE_XMP_LOCAL_ARUCO
 from tests.mocks.fixtures_generator import make_summary_detections
-from geo_weed_station.schemas.mission import Waypoint
 
 
 def test_factory_kinds(tmp_path: Path):

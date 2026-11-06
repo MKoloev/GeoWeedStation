@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import struct
-from typing import Optional, Tuple
+from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -17,10 +17,10 @@ def make_geotagged_jpeg(
     path: Path,
     *,
     cs: CoordinateSystem = CoordinateSystem.LOCAL_ARUCO,
-    altitude_m: Optional[float] = 10.0,
+    altitude_m: float | None = 10.0,
     yaw_deg: float = 0.0,
-    xy: Tuple[float, float] = (5.0, 5.0),
-    size: Tuple[int, int] = (64, 48),
+    xy: tuple[float, float] = (5.0, 5.0),
+    size: tuple[int, int] = (64, 48),
 ) -> Path:
     """Create a decodable JPEG file with embedded XMP spatial metadata."""
     path = Path(path)
@@ -72,7 +72,7 @@ def make_broken_jpeg(path: Path) -> Path:
     return path
 
 
-def make_video(path: Path, frames: int = 15, fps: int = 15, size: Tuple[int, int] = (64, 48)) -> Path:
+def make_video(path: Path, frames: int = 15, fps: int = 15, size: tuple[int, int] = (64, 48)) -> Path:
     """Generate a test mp4 video stream."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

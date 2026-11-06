@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Sequence, Tuple
-import numpy as np
+from collections.abc import Sequence
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from geo_weed_station.schemas.entities import CoordinateSystem, SensorOptics
@@ -16,19 +16,19 @@ class PlannerParams(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    corner_tl: Tuple[float, float]  # Top-left or first corner (x1, y1)
-    corner_br: Tuple[float, float]  # Bottom-right or second corner (x2, y2)
+    corner_tl: tuple[float, float]  # Top-left or first corner (x1, y1)
+    corner_br: tuple[float, float]  # Bottom-right or second corner (x2, y2)
     coordinate_system: CoordinateSystem
     altitude_m: float  # Survey altitude Z above ground
     optics: SensorOptics
     overlap: float = Field(default=0.1, ge=0.0, le=0.9)  # Forward/side overlap fraction
     mode: MissionMode
     save_policy: SavePolicy
-    step_override_m: Optional[float] = None
+    step_override_m: float | None = None
     start_yaw_rad: float = 0.0
 
 
-def compute_footprint_m(optics: SensorOptics, altitude_m: float) -> Tuple[float, float]:
+def compute_footprint_m(optics: SensorOptics, altitude_m: float) -> tuple[float, float]:
     """Compute physical ground coverage footprint (width_m, height_m) for given camera optics and altitude."""
     alt = max(0.01, altitude_m)
 
@@ -53,7 +53,7 @@ def compute_footprint_m(optics: SensorOptics, altitude_m: float) -> Tuple[float,
     return max(0.1, w_m), max(0.1, h_m)
 
 
-def compute_grid_step(optics: SensorOptics, altitude_m: float, overlap: float) -> Tuple[float, float]:
+def compute_grid_step(optics: SensorOptics, altitude_m: float, overlap: float) -> tuple[float, float]:
     """Calculate distance step between flight lines (step_x, step_y) accounting for overlap."""
     footprint_w, footprint_h = compute_footprint_m(optics, altitude_m)
     overlap_clamped = max(0.0, min(0.9, overlap))
@@ -62,9 +62,9 @@ def compute_grid_step(optics: SensorOptics, altitude_m: float, overlap: float) -
     return max(0.1, step_x), max(0.1, step_y)
 
 
-def validate_params(params: PlannerParams, max_extent_m: float = 3.0) -> List[str]:
+def validate_params(params: PlannerParams, max_extent_m: float = 3.0) -> list[str]:
     """Validate mission planning parameters. Returns a list of error descriptions (empty if valid)."""
-    errors: List[str] = []
+    errors: list[str] = []
 
     if params.altitude_m <= 0.0:
         errors.append(f"Altitude must be > 0, got {params.altitude_m}")
@@ -95,7 +95,7 @@ def validate_params(params: PlannerParams, max_extent_m: float = 3.0) -> List[st
     return errors
 
 
-def generate_waypoints(params: PlannerParams) -> List[Waypoint]:
+def generate_waypoints(params: PlannerParams) -> list[Waypoint]:
     """Generate ordered serpentine (lawnmower) flight path waypoints.
     
     Even rows are traversed left-to-right, odd rows right-to-left.
@@ -135,7 +135,7 @@ def generate_waypoints(params: PlannerParams) -> List[Waypoint]:
             # Traverse from top (max_y) down to bottom (min_y)
             y_coords = [round(max_y - offset_y - i * step_y, 4) for i in range(num_rows)]
 
-    waypoints: List[Waypoint] = []
+    waypoints: list[Waypoint] = []
     yaw = params.start_yaw_rad
 
     for row_idx, y in enumerate(y_coords):

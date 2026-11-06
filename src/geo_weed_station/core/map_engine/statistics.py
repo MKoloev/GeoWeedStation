@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Optional, Sequence
+from collections.abc import Sequence
+
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
@@ -44,7 +45,7 @@ def convex_hull_area(points: Sequence[WeedPoint]) -> float:
 
 def calculate_statistics(
     points: Sequence[WeedPoint],
-    grid: Optional[HeatmapGrid] = None,
+    grid: HeatmapGrid | None = None,
     critical_threshold: float = 5.0,
 ) -> MapStatistics:
     """Calculate aggregated agronomic metrics for the surveyed field area.

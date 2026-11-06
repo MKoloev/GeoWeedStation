@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QSettings, QThread, Slot
+from PySide6.QtCore import QSettings, Slot
+from PySide6.QtWidgets import QApplication, QLabel
 
 from geo_weed_station.ui import main_window as mw_module
 from geo_weed_station.ui.app_mode import AppMode, ModeManager
@@ -20,7 +21,6 @@ from geo_weed_station.ui.main_window import (
 )
 from geo_weed_station.ui.theme import ICONS_DIR, icon, load_stylesheet
 from geo_weed_station.workers.base_worker import ManagedWorker, start_in_thread
-from PySide6.QtWidgets import QApplication, QLabel
 
 
 def _ini(tmp_path: Path) -> QSettings:

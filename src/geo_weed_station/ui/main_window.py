@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple
-from PySide6.QtCore import QObject, QSettings, QThread, Qt, Signal
+
+from PySide6.QtCore import QObject, QSettings, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent
 from PySide6.QtWidgets import (
     QDockWidget,
@@ -29,7 +29,7 @@ TAB_VIDEO = "video"
 TAB_MAP = "map"
 TAB_MISSION = "mission"
 TAB_RUNS = "runs"
-_TABS: List[Tuple[str, str]] = [
+_TABS: list[tuple[str, str]] = [
     (TAB_IMAGE, "Изображение"),
     (TAB_VIDEO, "Видео"),
     (TAB_MAP, "Карта"),
@@ -55,9 +55,9 @@ class MainWindow(QMainWindow):
 
     def __init__(
         self,
-        mode_manager: Optional[ModeManager] = None,
-        qsettings: Optional[QSettings] = None,
-        parent: Optional[QWidget] = None,
+        mode_manager: ModeManager | None = None,
+        qsettings: QSettings | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("mainWindow")
@@ -66,9 +66,9 @@ class MainWindow(QMainWindow):
 
         self._qsettings = qsettings
         self._mode_manager = mode_manager or ModeManager(qsettings, parent=self)
-        self._panels: Dict[AppMode, List[QDockWidget]] = {AppMode.ONLINE: [], AppMode.OFFLINE: []}
-        self._threads: List[Tuple[QThread, Optional[QObject]]] = []
-        self._pages: Dict[str, QStackedWidget] = {}
+        self._panels: dict[AppMode, list[QDockWidget]] = {AppMode.ONLINE: [], AppMode.OFFLINE: []}
+        self._threads: list[tuple[QThread, QObject | None]] = []
+        self._pages: dict[str, QStackedWidget] = {}
         self._map_locked = False
 
         self._build_tabs()
@@ -205,10 +205,10 @@ class MainWindow(QMainWindow):
         self._panels[mode].append(dock)
         dock.setVisible(mode == self._mode_manager.mode)
 
-    def mode_panels(self, mode: AppMode) -> List[QDockWidget]:
+    def mode_panels(self, mode: AppMode) -> list[QDockWidget]:
         return list(self._panels[AppMode(mode)])
 
-    def set_map_tab_locked(self, locked: bool, reason: Optional[str] = None) -> None:
+    def set_map_tab_locked(self, locked: bool, reason: str | None = None) -> None:
         """Lock the map tab and show the georeference warning instead of its content."""
         self._map_locked = bool(locked)
         stack = self._pages[TAB_MAP]
@@ -230,11 +230,11 @@ class MainWindow(QMainWindow):
         label = self._pages[TAB_MAP].widget(_PAGE_LOCKED)
         return label.text() if isinstance(label, QLabel) else ""
 
-    def register_thread(self, thread: QThread, worker: Optional[QObject] = None) -> None:
+    def register_thread(self, thread: QThread, worker: QObject | None = None) -> None:
         """Track a worker thread so closeEvent can stop it and wait for completion."""
         self._threads.append((thread, worker))
 
-    def shutdown_threads(self, timeout_ms: Optional[int] = None) -> bool:
+    def shutdown_threads(self, timeout_ms: int | None = None) -> bool:
         """Request workers to stop, quit their threads and wait. Returns True if all stopped."""
         timeout = self.SHUTDOWN_TIMEOUT_MS if timeout_ms is None else timeout_ms
         for _thread, worker in self._threads:
@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         if geometry is not None:
             self.restoreGeometry(geometry)
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+    def closeEvent(self, event: QCloseEvent) -> None:
         self.closing.emit()
         self.shutdown_threads()
         if self._qsettings is not None:

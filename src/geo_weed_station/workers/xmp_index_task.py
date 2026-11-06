@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from pathlib import Path
+
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 from geo_weed_station.core.xmp_parser import has_xmp
@@ -22,7 +23,7 @@ class XmpIndexTask(QRunnable):
 
     def __init__(
         self,
-        items: Sequence[Tuple[int, str]],
+        items: Sequence[tuple[int, str]],
         signals: XmpIndexSignals,
         cancel_event: threading.Event,
         on_done=None,
@@ -67,8 +68,8 @@ class XmpIndexJob:
 
 
 def start_xmp_indexing(
-    items: Sequence[Tuple[int, str]],
-    pool: Optional[QThreadPool] = None,
+    items: Sequence[tuple[int, str]],
+    pool: QThreadPool | None = None,
     chunk_size: int = 16,
 ) -> XmpIndexJob:
     """Prepare chunked XMP indexing; connect to `job.signals`, then call `job.start()`.
@@ -80,7 +81,7 @@ def start_xmp_indexing(
     signals = XmpIndexSignals()
     cancel = threading.Event()
     items = list(items)
-    chunks: List[List[Tuple[int, str]]] = [
+    chunks: list[list[tuple[int, str]]] = [
         items[i : i + chunk_size] for i in range(0, len(items), chunk_size)
     ]
     remaining = {"n": len(chunks)}

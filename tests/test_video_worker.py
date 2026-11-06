@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
-from typing import List
-from unittest import mock
+from pathlib import Path
 
-import cv2
-import numpy as np
 import pytest
 from PySide6.QtCore import Q_ARG, QMetaObject, Qt
 

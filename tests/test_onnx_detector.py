@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
 import pytest
@@ -14,7 +15,6 @@ from geo_weed_station.core.image_io import MAX_IMAGE_HEIGHT, MAX_IMAGE_WIDTH, re
 from geo_weed_station.core.onnx_detector import (
     OnnxDetector,
     letterbox,
-    load_class_names,
     nms,
 )
 from tests.helpers.make_dummy_onnx import create_dummy_yolo_onnx
@@ -233,3 +233,36 @@ def test_onnx_detector_missing_model(tmp_path: Path):
     detector = OnnxDetector(settings)
     with pytest.raises(DetectionError):
         detector.load()
+
+
+def test_resolve_classes_path_and_scan(tmp_path: Path):
+    """Verify scanning models and auto-resolving corresponding classes.json."""
+    from geo_weed_station.core.onnx_detector import resolve_classes_path, scan_available_models
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    m1 = models_dir / "alpha.onnx"
+    m2 = models_dir / "beta.onnx"
+    m1.touch()
+    m2.touch()
+    (models_dir / "not_model.txt").touch()
+
+    scanned = scan_available_models(models_dir)
+    assert [p.name for p in scanned] == ["alpha.onnx", "beta.onnx"]
+
+    # Candidate 1: alpha.json next to alpha.onnx
+    c_alpha = models_dir / "alpha.json"
+    c_alpha.write_text('{"0": "Corn"}')
+    assert resolve_classes_path(m1) == c_alpha
+
+    # Candidate 2: beta_classes.json next to beta.onnx
+    c_beta = models_dir / "beta_classes.json"
+    c_beta.write_text('{"0": "Sunflower"}')
+    assert resolve_classes_path(m2) == c_beta
+
+    # Fallback to classes.json
+    m3 = models_dir / "gamma.onnx"
+    m3.touch()
+    c_global = models_dir / "classes.json"
+    c_global.write_text('{"0": "Global"}')
+    assert resolve_classes_path(m3) == c_global

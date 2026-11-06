@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import sys
-from typing import Optional, Sequence
+from collections.abc import Sequence
+from pathlib import Path
 
 from geo_weed_station.config.logging_setup import setup_logging
-from geo_weed_station.config.settings import AppSettings, get_settings
+from geo_weed_station.config.settings import get_settings
 
 
-def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         prog="geo-weed-station",
@@ -31,12 +31,8 @@ def run_selftest() -> int:
         settings = get_settings()
         assert settings is not None, "Failed to load AppSettings"
 
-        import cv2
-        import numpy as np
-        import onnxruntime
-        from PySide6 import QtCore, QtGui, QtWidgets
-        from geo_weed_station.core.map_engine.weed_map import MapEngine
-        from geo_weed_station.core.xmp_parser import parse_xmp
+        from PySide6 import QtWidgets
+
         from geo_weed_station.ui.theme import load_stylesheet
 
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -54,7 +50,7 @@ def run_selftest() -> int:
         return 1
 
 
-def main(argv: Optional[Sequence[str]] = None, run_event_loop: bool = False) -> int:
+def main(argv: Sequence[str] | None = None, run_event_loop: bool = False) -> int:
     """Initialize settings, logging, Qt application and the AppController."""
     args = parse_args(argv)
 
@@ -72,6 +68,7 @@ def main(argv: Optional[Sequence[str]] = None, run_event_loop: bool = False) -> 
     setup_logging(settings)
 
     from PySide6.QtWidgets import QApplication
+
     from geo_weed_station.controllers.app_controller import AppController
     from geo_weed_station.ui.theme import load_stylesheet
 

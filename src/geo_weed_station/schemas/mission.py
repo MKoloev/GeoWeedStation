@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from geo_weed_station.schemas.entities import CoordinateSystem
@@ -43,7 +43,7 @@ class MissionTask(BaseModel):
     coordinate_system: CoordinateSystem
     mode: MissionMode
     save_policy: SavePolicy
-    waypoints: List[Waypoint] = Field(default_factory=list)
+    waypoints: list[Waypoint] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_task(self) -> MissionTask:

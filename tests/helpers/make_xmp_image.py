@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import struct
+from pathlib import Path
 
 _XMP_JPEG_HEADER = b"http://ns.adobe.com/xap/1.0/\x00"
 
@@ -96,8 +96,7 @@ def create_jpeg_with_xmp(path: Path, xmp_xml: str | None = None, padding_bytes: 
         if padding_bytes > 0:
             # Write in chunks
             chunk = b"\x00" * 65536
-            for _ in range(padding_bytes // 65536):
-                f.write(chunk)
+            f.writelines(chunk for _ in range(padding_bytes // 65536))
             remainder = padding_bytes % 65536
             if remainder > 0:
                 f.write(b"\x00" * remainder)

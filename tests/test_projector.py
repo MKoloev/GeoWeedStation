@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import pytest
 
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError

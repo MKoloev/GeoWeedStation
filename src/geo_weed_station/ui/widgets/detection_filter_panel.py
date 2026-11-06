@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence, Set
+from collections.abc import Sequence
+from pathlib import Path
+
 from pydantic import BaseModel, ConfigDict, Field
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -32,15 +36,16 @@ class DetectionFilterState(BaseModel):
 
 
 class DetectionFilterPanel(QWidget):
-    """Widget allowing the user to toggle boxes, labels, confidence threshold and per-class visibility."""
+    """Widget allowing the user to toggle boxes, labels, confidence threshold, model, and per-class visibility."""
 
+    model_changed = Signal(Path)
     filter_changed = Signal(DetectionFilterState)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._block_signals = False
-        self._class_names: List[str] = []
-        self._hidden_classes: Set[str] = set()
+        self._class_names: list[str] = []
+        self._hidden_classes: set[str] = set()
 
         self._init_ui()
 
@@ -48,6 +53,26 @@ class DetectionFilterPanel(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(6)
+
+        # 0. Active model selector group
+        model_group = QGroupBox("Нейросетевая модель", self)
+        model_layout = QVBoxLayout(model_group)
+        model_layout.setContentsMargins(6, 6, 6, 6)
+        model_layout.setSpacing(4)
+
+        row_model = QHBoxLayout()
+        self._combo_model = QComboBox(self)
+        self._combo_model.currentIndexChanged.connect(self._on_combo_model_changed)
+        self._btn_browse_model = QPushButton("...", self)
+        self._btn_browse_model.setToolTip("Выбрать ONNX-модель с диска")
+        self._btn_browse_model.setMaximumWidth(36)
+        self._btn_browse_model.clicked.connect(self._on_browse_model)
+
+        row_model.addWidget(self._combo_model, stretch=1)
+        row_model.addWidget(self._btn_browse_model)
+        model_layout.addLayout(row_model)
+
+        main_layout.addWidget(model_group)
 
         # 1. Visibility group
         vis_group = QGroupBox("Отображение детекций", self)
@@ -110,6 +135,41 @@ class DetectionFilterPanel(QWidget):
     # -------------------------------------------------------------------------
     # Public interface
     # -------------------------------------------------------------------------
+    def set_available_models(self, models: Sequence[Path], active: Path | None = None) -> None:
+        """Populate the model selector combobox with available ONNX models."""
+        self._block_signals = True
+        self._combo_model.clear()
+        active_idx = -1
+        active_resolved = active.resolve() if active is not None and active.exists() else None
+
+        for i, m in enumerate(models):
+            p = Path(m)
+            self._combo_model.addItem(p.name, userData=str(p))
+            if active_resolved is not None and p.exists() and p.resolve() == active_resolved:
+                active_idx = i
+
+        if active_idx == -1 and active is not None and Path(active).is_file():
+            p = Path(active)
+            self._combo_model.addItem(p.name, userData=str(p))
+            active_idx = self._combo_model.count() - 1
+
+        if active_idx >= 0:
+            self._combo_model.setCurrentIndex(active_idx)
+
+        self._block_signals = False
+
+    def selected_model(self) -> Path | None:
+        """Return currently selected ONNX model path or None."""
+        data = self._combo_model.currentData()
+        return Path(data) if data else None
+
+    def load_classes_from_file(self, classes_path: Path) -> None:
+        """Load and display classes from JSON file."""
+        from geo_weed_station.core.onnx_detector import load_class_names
+
+        classes_dict = load_class_names(classes_path)
+        self.set_classes(list(classes_dict.values()))
+
     def set_classes(self, names: Sequence[str]) -> None:
         """Populate the list of classes, preserving unchecked state for known names."""
         self._class_names = list(names)
@@ -190,6 +250,39 @@ class DetectionFilterPanel(QWidget):
         else:
             self._hidden_classes.discard(name)
         self._emit_filter_changed()
+
+    def _on_combo_model_changed(self, index: int) -> None:
+        if self._block_signals or index < 0:
+            return
+        model_path = self.selected_model()
+        if model_path is not None:
+            self.model_changed.emit(model_path)
+
+    def _on_browse_model(self) -> None:
+        from geo_weed_station.core.onnx_detector import get_models_dir
+
+        current_model = self.selected_model()
+        start_dir = str(get_models_dir(current_model))
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выбрать ONNX-модель",
+            start_dir,
+            "ONNX Models (*.onnx);;All Files (*.*)",
+        )
+        if not path:
+            return
+        model_p = Path(path)
+        # Check if already in combobox
+        idx = -1
+        for i in range(self._combo_model.count()):
+            if self._combo_model.itemData(i) == str(model_p):
+                idx = i
+                break
+        if idx == -1:
+            self._combo_model.addItem(model_p.name, userData=str(model_p))
+            idx = self._combo_model.count() - 1
+
+        self._combo_model.setCurrentIndex(idx)
 
     def _emit_filter_changed(self) -> None:
         self.filter_changed.emit(self.current_state())

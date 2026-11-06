@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from collections.abc import Callable
+
 import cv2
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
@@ -26,19 +27,19 @@ class VideoWorker(ManagedWorker):
 
     def __init__(
         self,
-        detector_factory: Optional[Callable[[], BaseDetector]] = None,
+        detector_factory: Callable[[], BaseDetector] | None = None,
         max_inflight: int = 3,
-        parent: Optional[QObject] = None,
+        parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._detector_factory = detector_factory
-        self._detector: Optional[BaseDetector] = None
-        self._cap: Optional[cv2.VideoCapture] = None
+        self._detector: BaseDetector | None = None
+        self._cap: cv2.VideoCapture | None = None
         self._total = 0
         self._fps = 25.0
         self._next_index = 0
         self._skip = 0
-        self._last_dets: List[DetectedWeed] = []
+        self._last_dets: list[DetectedWeed] = []
         self._inflight = FrameQueue(maxlen=max_inflight)
         self.dropped_frames = 0
         self._timer = QTimer(self)
@@ -60,7 +61,7 @@ class VideoWorker(ManagedWorker):
             finally:
                 self._cap = None
 
-    def _ensure_detector(self) -> Optional[BaseDetector]:
+    def _ensure_detector(self) -> BaseDetector | None:
         if self._detector is None and self._detector_factory is not None:
             detector = self._detector_factory()
             detector.load()

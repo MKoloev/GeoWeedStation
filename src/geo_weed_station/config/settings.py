@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, Tuple
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings
@@ -68,7 +67,7 @@ class DetectorSettings(BaseModel):
     classes_path: Path = Path("models/classes.json")
     confidence_threshold: float = 0.25
     nms_iou_threshold: float = 0.45
-    input_size: Tuple[int, int] = (640, 640)
+    input_size: tuple[int, int] = (640, 640)
     video_frame_skip: int = 3  # Detect on every N-th frame
 
     @field_validator("confidence_threshold")
@@ -99,7 +98,7 @@ class MapSettings(BaseModel):
     heatmap_cell_m: float = 0.5
     critical_density_threshold: float = 5.0
     max_local_extent_m: float = 3.0
-    wgs84_origin: Optional[Tuple[float, float]] = None  # Reference point (lat, lon)
+    wgs84_origin: tuple[float, float] | None = None  # Reference point (lat, lon)
 
     @field_validator("heatmap_cell_m")
     @classmethod
@@ -124,7 +123,7 @@ class MapSettings(BaseModel):
 
     @field_validator("wgs84_origin")
     @classmethod
-    def validate_origin(cls, v: Optional[Tuple[float, float]]) -> Optional[Tuple[float, float]]:
+    def validate_origin(cls, v: tuple[float, float] | None) -> tuple[float, float] | None:
         if v is not None:
             lat, lon = v
             if not (-90.0 <= lat <= 90.0):
@@ -171,7 +170,7 @@ class AppSettings(BaseSettings):
             f.write(self.model_dump_json(indent=2))
 
 
-_global_settings: Optional[AppSettings] = None
+_global_settings: AppSettings | None = None
 
 
 def get_settings(path: Path | None = None, reload: bool = False) -> AppSettings:

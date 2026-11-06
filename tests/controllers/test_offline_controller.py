@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import numpy as np
 import pytest
 from PySide6.QtCore import QSettings
@@ -92,3 +91,20 @@ def test_offline_controller_cancel(offline_setup, qtbot):
     ctrl.cancel()
     # Does not crash when no worker is running
     assert window.status_bar_panel.cancel_button.isEnabled() is False
+
+
+def test_offline_controller_model_switching(offline_setup, qtbot):
+    ctrl, _map_ctrl, window, tmp_path = offline_setup
+
+    m1 = tmp_path / "custom_weed.onnx"
+    m1.touch()
+    c1 = tmp_path / "custom_weed.json"
+    c1.write_text('{"0": "Corn", "1": "Sunflower"}', encoding="utf-8")
+
+    ctrl._on_model_changed(m1)
+
+    assert ctrl._settings.detector.model_path == m1
+    assert ctrl._settings.detector.classes_path == c1
+    assert "Corn" in ctrl.filter_panel._class_names
+    assert "Sunflower" in ctrl.filter_panel._class_names
+    assert "custom_weed.onnx" in window.status_bar_panel.message_text

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional, Tuple
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -31,7 +31,7 @@ class BBox(BaseModel):
             raise ValueError(f"BBox coordinate must be in [0.0, 1.0], got {v}")
         return v
 
-    def to_xyxy(self) -> Tuple[float, float, float, float]:
+    def to_xyxy(self) -> tuple[float, float, float, float]:
         """Convert [x, y, w, h] to [xmin, ymin, xmax, ymax] normalized coordinates."""
         return (self.x, self.y, min(1.0, self.x + self.w), min(1.0, self.y + self.h))
 
@@ -46,8 +46,8 @@ class DetectedWeed(BaseModel):
     class_name: str
     confidence: float
     bbox: BBox
-    world_x: Optional[float] = None  # Metres in local_aruco or Longitude in wgs84
-    world_y: Optional[float] = None  # Metres in local_aruco or Latitude in wgs84
+    world_x: float | None = None  # Metres in local_aruco or Longitude in wgs84
+    world_y: float | None = None  # Metres in local_aruco or Latitude in wgs84
 
     @field_validator("confidence")
     @classmethod
@@ -77,9 +77,9 @@ class SensorOptics(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     focal_length_mm: float
-    fov_h_deg: Optional[float] = None
-    fov_v_deg: Optional[float] = None
-    sensor_width_mm: Optional[float] = None
-    sensor_height_mm: Optional[float] = None
-    principal_point_px: Optional[Tuple[float, float]] = None
-    band_names: List[str] = Field(default_factory=list)
+    fov_h_deg: float | None = None
+    fov_v_deg: float | None = None
+    sensor_width_mm: float | None = None
+    sensor_height_mm: float | None = None
+    principal_point_px: tuple[float, float] | None = None
+    band_names: list[str] = Field(default_factory=list)

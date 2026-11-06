@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -30,6 +30,7 @@ from geo_weed_station.config.settings import (
     MapSettings,
     NetworkSettings,
 )
+from geo_weed_station.core.onnx_detector import get_models_dir, resolve_classes_path
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 class SettingsDialog(QDialog):
     """Settings dialog allowing safe, validated modification of application configuration."""
 
-    def __init__(self, settings: AppSettings, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Настройки GeoWeedStation")
         self.resize(550, 480)
@@ -282,7 +283,7 @@ class SettingsDialog(QDialog):
             return
 
         try:
-            origin: Optional[Tuple[float, float]] = None
+            origin: tuple[float, float] | None = None
             if self.cb_has_origin.isChecked():
                 origin = (self.spin_lat.value(), self.spin_lon.value())
 
@@ -318,14 +319,34 @@ class SettingsDialog(QDialog):
             self._show_error(str(exc))
 
     def _browse_model(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать ONNX-модель", "", "ONNX models (*.onnx);;All (*)")
+        current_path = self.edit_model_path.text().strip()
+        start_dir = str(get_models_dir(Path(current_path) if current_path else None))
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выбрать ONNX-модель",
+            start_dir,
+            "ONNX models (*.onnx);;All (*)",
+        )
         if path:
-            self.edit_model_path.setText(path)
+            model_p = Path(path)
+            self.edit_model_path.setText(str(model_p))
+            classes_p = resolve_classes_path(model_p)
+            if classes_p.is_file():
+                self.edit_classes_path.setText(str(classes_p))
 
     def _browse_classes(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Выбрать файл классов", "", "JSON (*.json);;All (*)")
+        current_classes = self.edit_classes_path.text().strip()
+        current_model = self.edit_model_path.text().strip()
+        pref_path = Path(current_classes) if current_classes else (Path(current_model).parent if current_model else None)
+        start_dir = str(get_models_dir(pref_path))
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выбрать файл классов",
+            start_dir,
+            "JSON (*.json);;All (*)",
+        )
         if path:
-            self.edit_classes_path.setText(path)
+            self.edit_classes_path.setText(str(Path(path)))
 
     def _browse_workdir(self) -> None:
         path = QFileDialog.getExistingDirectory(self, "Выбрать рабочий каталог")

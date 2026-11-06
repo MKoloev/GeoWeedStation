@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
+
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QPersistentModelIndex, Qt
 
 from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
@@ -40,24 +42,24 @@ def _format_size(size_bytes: int) -> str:
 class FileTableModel(QAbstractTableModel):
     """QAbstractTableModel representing a list of FileEntry objects for offline batch views."""
 
-    def __init__(self, parent: Optional[Any] = None) -> None:
+    def __init__(self, parent: Any | None = None) -> None:
         super().__init__(parent)
-        self._entries: List[FileEntry] = []
+        self._entries: list[FileEntry] = []
 
     # -------------------------------------------------------------------------
     # QAbstractTableModel interface overrides
     # -------------------------------------------------------------------------
-    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         if parent.isValid():
             return 0
         return len(self._entries)
 
-    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         if parent.isValid():
             return 0
         return len(COLUMN_HEADERS)
 
-    def headerData(  # noqa: N802
+    def headerData(
         self,
         section: int,
         orientation: Qt.Orientation,
@@ -68,7 +70,7 @@ class FileTableModel(QAbstractTableModel):
                 return COLUMN_HEADERS[section]
         return None
 
-    def data(  # noqa: N802
+    def data(
         self,
         index: QModelIndex | QPersistentModelIndex,
         role: int = Qt.ItemDataRole.DisplayRole,
@@ -134,7 +136,7 @@ class FileTableModel(QAbstractTableModel):
             bottom_right = self.index(row, len(COLUMN_HEADERS) - 1)
             self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.UserRole])
 
-    def entry_at(self, row: int) -> Optional[FileEntry]:
+    def entry_at(self, row: int) -> FileEntry | None:
         """Return FileEntry at given row if in bounds, else None."""
         if 0 <= row < len(self._entries):
             return self._entries[row]
@@ -147,6 +149,6 @@ class FileTableModel(QAbstractTableModel):
         self.endResetModel()
 
     @property
-    def entries(self) -> List[FileEntry]:
+    def entries(self) -> list[FileEntry]:
         """Return copy of entries."""
         return list(self._entries)

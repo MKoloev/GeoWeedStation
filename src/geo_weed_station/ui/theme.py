@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from PySide6.QtGui import QIcon
 
 RESOURCES_DIR = Path(__file__).resolve().parent / "resources"

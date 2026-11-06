@@ -46,3 +46,8 @@ workdir/temp/
 workdir/downloads/
 workdir/cache/
 *.log
+
+
+# Project Runtime Artifacts & User Data
+workdir/*
+!workdir/.gitkeep

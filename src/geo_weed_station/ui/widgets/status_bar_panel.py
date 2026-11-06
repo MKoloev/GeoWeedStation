@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -29,7 +28,7 @@ class StatusBarPanel(QWidget):
 
     cancel_requested = Signal()
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("statusBarPanel")
 
@@ -94,6 +93,10 @@ class StatusBarPanel(QWidget):
         return self._counters.text()
 
     @property
+    def message_text(self) -> str:
+        return self._message.text()
+
+    @property
     def connection_text(self) -> str:
         return self._connection.text()
 
@@ -120,7 +123,7 @@ class StatusBarPanel(QWidget):
     def set_cancel_enabled(self, enabled: bool) -> None:
         self._cancel.setEnabled(bool(enabled))
 
-    def set_counters(self, captures: Optional[int], weeds: Optional[int]) -> None:
+    def set_counters(self, captures: int | None, weeds: int | None) -> None:
         """Show capture / weed counters; None renders as an em dash."""
         c = "—" if captures is None else str(captures)
         w = "—" if weeds is None else str(weeds)

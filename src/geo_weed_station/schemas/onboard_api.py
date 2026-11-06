@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from geo_weed_station.schemas.entities import (
@@ -31,7 +31,7 @@ class StartRequest(BaseModel):
     coordinate_system: str = Field(..., description="'aruco_local' or 'wgs84'")
     use_nn: bool
     save_policy: str = Field(..., description="'all', 'images_only', or 'metadata_only'")
-    waypoints: List[Waypoint]
+    waypoints: list[Waypoint]
 
 
 class StartResponse(BaseModel):
@@ -60,7 +60,7 @@ class StopResponse(BaseModel):
 
     status: str
     action_initiated: str
-    active_run_id: Optional[str] = None
+    active_run_id: str | None = None
     message: str
 
 
@@ -74,7 +74,7 @@ class DroneRun(BaseModel):
     status: str
     directory_path: str
     size_bytes: int
-    contents: List[str]
+    contents: list[str]
 
 
 class SummaryTargetCoords(BaseModel):
@@ -93,8 +93,8 @@ class SummaryDetection(BaseModel):
 
     class_name: str
     confidence: float
-    bbox_px: List[int] = Field(..., min_length=4, max_length=4, description="[x1, y1, x2, y2] in pixels")
-    target_local_coords: Optional[SummaryTargetCoords] = None
+    bbox_px: list[int] = Field(..., min_length=4, max_length=4, description="[x1, y1, x2, y2] in pixels")
+    target_local_coords: SummaryTargetCoords | None = None
 
 
 class SummaryItem(BaseModel):
@@ -107,7 +107,7 @@ class SummaryItem(BaseModel):
     camera_x: float
     camera_y: float
     altitude_m: float
-    detections: List[SummaryDetection] = Field(default_factory=list)
+    detections: list[SummaryDetection] = Field(default_factory=list)
 
 
 class SummaryDetections(BaseModel):
@@ -118,7 +118,7 @@ class SummaryDetections(BaseModel):
     run_id: str
     coordinate_system: str
     detections_count: int
-    items: List[SummaryItem]
+    items: list[SummaryItem]
 
 
 class DeleteRunResponse(BaseModel):
@@ -145,7 +145,7 @@ def mission_to_start_request(task: MissionTask) -> StartRequest:
 
 def summary_to_frame_payloads(
     summary: SummaryDetections, default_frame_size_px: tuple[int, int] = (640, 640)
-) -> List[FramePayload]:
+) -> list[FramePayload]:
     """Convert onboard SummaryDetections to a list of FramePayload instances."""
     cs = (
         CoordinateSystem.LOCAL_ARUCO
@@ -154,7 +154,7 @@ def summary_to_frame_payloads(
     )
     img_w, img_h = default_frame_size_px
 
-    payloads: List[FramePayload] = []
+    payloads: list[FramePayload] = []
     for item in summary.items:
         frame_id = f"{summary.run_id}_wp{item.wp_index}"
         pose = CameraSpatialPose(
@@ -167,7 +167,7 @@ def summary_to_frame_payloads(
             yaw_deg=0.0,
         )
 
-        detections: List[DetectedWeed] = []
+        detections: list[DetectedWeed] = []
         for idx, det in enumerate(item.detections):
             # Convert pixel coords [x1, y1, x2, y2] to normalized [0..1]
             x1, y1, x2, y2 = det.bbox_px

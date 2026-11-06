@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections import deque
 import threading
-from typing import Any, Deque, Optional
+from collections import deque
+from typing import Any
 
 
 class FrameQueue:
@@ -14,7 +14,7 @@ class FrameQueue:
         if maxlen < 1:
             raise ValueError("maxlen must be >= 1")
         self.maxlen = maxlen
-        self._items: Deque[Any] = deque()
+        self._items: deque[Any] = deque()
         self._cond = threading.Condition()
         self._dropped = 0
 
@@ -30,7 +30,7 @@ class FrameQueue:
             self._cond.notify()
             return dropped
 
-    def get(self, timeout: Optional[float] = None) -> Optional[Any]:
+    def get(self, timeout: float | None = None) -> Any | None:
         """Pop the oldest item, waiting up to timeout seconds; None if empty."""
         with self._cond:
             if not self._items:

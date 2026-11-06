@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from geo_weed_station.config.logging_setup import setup_logging
 from geo_weed_station.config.settings import (
     AppSettings,
-    DetectorSettings,
     MapSettings,
     NetworkSettings,
     get_settings,

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from geo_weed_station.network.drone_client import DroneClient
 from geo_weed_station.schemas.mission import Waypoint
 from geo_weed_station.schemas.onboard_api import (
     DeleteRunResponse,
-    DroneRun,
     StartRequest,
     StartResponse,
     StopAction,

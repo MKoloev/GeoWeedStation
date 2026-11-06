@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+
 import pytest
 from PySide6.QtCore import QSettings
 
@@ -15,14 +16,12 @@ from geo_weed_station.core.mission_planner import PlannerParams
 from geo_weed_station.schemas.entities import CoordinateSystem, SensorOptics
 from geo_weed_station.schemas.mission import MissionMode, MissionTask, SavePolicy, Waypoint
 from geo_weed_station.schemas.telemetry import (
-    ConnectionState,
     DronePose,
     DroneStatus,
     FlightState,
 )
 from geo_weed_station.ui.main_window import MainWindow
 from geo_weed_station.ui.widgets.map_canvas import MapCanvas
-from tests.mocks.mock_onboard_server import MockConfig, run_in_thread
 
 
 @pytest.fixture

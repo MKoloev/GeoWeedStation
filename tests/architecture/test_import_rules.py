@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import Dict, Set
-import pytest
 
 SRC_DIR = Path(__file__).resolve().parent.parent.parent / "src" / "geo_weed_station"
 
 
-def collect_module_imports(py_file: Path) -> Set[str]:
+def collect_module_imports(py_file: Path) -> set[str]:
     """Parse a python file using AST and return a set of all imported root module names."""
     imports = set()
     try:
@@ -28,7 +26,7 @@ def collect_module_imports(py_file: Path) -> Set[str]:
     return imports
 
 
-def collect_layer_imports(subfolder: str) -> Dict[str, Set[str]]:
+def collect_layer_imports(subfolder: str) -> dict[str, set[str]]:
     """Map each file in subfolder to its imported modules."""
     res = {}
     target = SRC_DIR / subfolder

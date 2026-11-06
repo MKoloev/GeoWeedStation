@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
-from typing import Optional
+
 from PySide6.QtCore import Signal, Slot
 
 from geo_weed_station.network.download_manager import DownloadManager
@@ -22,14 +21,14 @@ class DownloadWorker(ManagedWorker):
         super().__init__()
         self.download_manager = download_manager
         self._cancel_event = threading.Event()
-        self._active_run_id: Optional[str] = None
+        self._active_run_id: str | None = None
 
     @Slot(str)
     def download(self, run_id: str) -> None:
         """Download and unpack run archive in background."""
         self._active_run_id = run_id
 
-        def progress_callback(downloaded: int, total: Optional[int]) -> None:
+        def progress_callback(downloaded: int, total: int | None) -> None:
             tot = -1 if total is None else total
             self.progress.emit(downloaded, tot)
 

@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import io
-import json
-from pathlib import Path
 import struct
-from typing import Any, Dict, List, Optional
 import zipfile
 
 from geo_weed_station.schemas.mission import Waypoint
@@ -110,17 +107,17 @@ def make_jpeg_bytes(xmp_xml: str | None = None) -> bytes:
 
 def make_summary_detections(
     run_id: str,
-    waypoints: List[Waypoint],
+    waypoints: list[Waypoint],
     coordinate_system: str = "aruco_local",
 ) -> SummaryDetections:
     """Generate SummaryDetections with realistic weed detections for given waypoints."""
-    items: List[SummaryItem] = []
+    items: list[SummaryItem] = []
     total_detections = 0
 
     weed_classes = ["taraxacum", "cirsium", "sonchus"]
 
     for idx, wp in enumerate(waypoints):
-        dets: List[SummaryDetection] = []
+        dets: list[SummaryDetection] = []
         if idx % 2 == 0:
             cls_name = weed_classes[idx % len(weed_classes)]
             dets.append(
@@ -154,7 +151,7 @@ def make_summary_detections(
 
 def make_run_zip_bytes(
     run_id: str,
-    waypoints: List[Waypoint],
+    waypoints: list[Waypoint],
     coordinate_system: str = "aruco_local",
 ) -> bytes:
     """Generate a mission ZIP archive containing JPEGs with XMP and summary.json."""

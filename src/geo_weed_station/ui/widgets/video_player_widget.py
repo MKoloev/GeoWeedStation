@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Sequence
-import numpy as np
+from collections.abc import Sequence
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal, Slot
+import numpy as np
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
 from PySide6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSlider,
     QSizePolicy,
-    QSpinBox,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -30,11 +29,11 @@ logger = logging.getLogger(__name__)
 class VideoFrameCanvas(QWidget):
     """High-performance canvas rendering video frames and detection boxes at >= 30 FPS."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._pixmap: Optional[QPixmap] = None
-        self._detections: List[DetectedWeed] = []
+        self._pixmap: QPixmap | None = None
+        self._detections: list[DetectedWeed] = []
         self._filter_state = DetectionFilterState()
 
     def set_frame(self, frame: np.ndarray, detections: Sequence[DetectedWeed]) -> None:
@@ -74,7 +73,7 @@ class VideoFrameCanvas(QWidget):
         self._detections = []
         self.update()
 
-    def paintEvent(self, event) -> None:  # noqa: N802
+    def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QColor(20, 20, 20))
@@ -127,7 +126,7 @@ class VideoFrameCanvas(QWidget):
             painter.drawRect(rect)
 
             # Draw label
-            label_parts: List[str] = []
+            label_parts: list[str] = []
             if self._filter_state.show_labels:
                 label_parts.append(weed.class_name)
             if self._filter_state.show_confidence:
@@ -147,7 +146,7 @@ class VideoPlayerWidget(QWidget):
     seek_requested = Signal(int)
     frame_skip_changed = Signal(int)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._is_playing = False
         self._current_frame = 0

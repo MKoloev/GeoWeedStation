@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import threading
-from typing import List, Optional
+from pathlib import Path
 
 from geo_weed_station.schemas.session import FileEntry, ProcessingStatus, SessionState
 
@@ -16,17 +15,17 @@ class ProcessingSession:
 
     def __init__(
         self,
-        entries: Optional[List[FileEntry]] = None,
-        source_kind: Optional[str] = None,
-        source_path: Optional[str] = None,
+        entries: list[FileEntry] | None = None,
+        source_kind: str | None = None,
+        source_path: str | None = None,
         run_inference: bool = False,
     ) -> None:
-        self.entries: List[FileEntry] = list(entries) if entries else []
+        self.entries: list[FileEntry] = list(entries) if entries else []
         self.source_kind = source_kind
         self.source_path = source_path
         self.run_inference = run_inference
         self._lock = threading.Lock()
-        self._autosave_path: Optional[Path] = None
+        self._autosave_path: Path | None = None
         self._autosave_every: int = 0
         self._updates_since_save: int = 0
 
@@ -42,7 +41,7 @@ class ProcessingSession:
             )
 
     @classmethod
-    def from_state(cls, state: SessionState) -> "ProcessingSession":
+    def from_state(cls, state: SessionState) -> ProcessingSession:
         """Restore session from a snapshot."""
         return cls(
             entries=list(state.entries),
@@ -61,7 +60,7 @@ class ProcessingSession:
         os.replace(tmp, path)
 
     @classmethod
-    def load(cls, path: Path) -> "ProcessingSession":
+    def load(cls, path: Path) -> ProcessingSession:
         """Load session from JSON; any in-flight PROCESSING entries return to PENDING."""
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         state = SessionState.model_validate(data)
@@ -82,7 +81,7 @@ class ProcessingSession:
         self,
         index: int,
         status: ProcessingStatus,
-        detections_count: Optional[int] = None,
+        detections_count: int | None = None,
     ) -> None:
         """Update status of an entry and trigger autosave if configured."""
         with self._lock:
@@ -106,6 +105,6 @@ class ProcessingSession:
             self._updates_since_save = 0
             self.save(self._autosave_path)
 
-    def pending_indices(self) -> List[int]:
+    def pending_indices(self) -> list[int]:
         """Indices of entries still awaiting processing."""
         return [i for i, e in enumerate(self.entries) if e.status == ProcessingStatus.PENDING]

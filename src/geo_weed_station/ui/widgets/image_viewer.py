@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Sequence, Tuple
-import numpy as np
+from collections.abc import Sequence
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
+import numpy as np
+from PySide6.QtCore import QRectF, Qt, Signal, Slot
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -54,7 +54,7 @@ class DetectionGraphicsItem(QGraphicsRectItem):
         weed: DetectedWeed,
         rect: QRectF,
         color: QColor,
-        parent: Optional[QGraphicsItem] = None,
+        parent: QGraphicsItem | None = None,
     ) -> None:
         super().__init__(rect, parent)
         self.weed = weed
@@ -92,7 +92,7 @@ class DetectionGraphicsItem(QGraphicsRectItem):
         self.setVisible(state.show_boxes)
 
         # 3. Text label visibility and content
-        label_parts: List[str] = []
+        label_parts: list[str] = []
         if state.show_labels:
             label_parts.append(self.weed.class_name)
         if state.show_confidence:
@@ -116,13 +116,13 @@ class ImageViewer(QGraphicsView):
     MIN_ZOOM = 0.05
     MAX_ZOOM = 50.0
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
 
-        self._pixmap_item: Optional[QGraphicsPixmapItem] = None
-        self._detection_items: List[DetectionGraphicsItem] = []
+        self._pixmap_item: QGraphicsPixmapItem | None = None
+        self._detection_items: list[DetectionGraphicsItem] = []
         self._filter_state = DetectionFilterState()
 
         # Resolution scaling tracking
@@ -238,7 +238,7 @@ class ImageViewer(QGraphicsView):
     # -------------------------------------------------------------------------
     # Qt Event Handlers
     # -------------------------------------------------------------------------
-    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
+    def wheelEvent(self, event: QWheelEvent) -> None:
         """Smooth zoom anchored at cursor position."""
         if self._pixmap_item is None:
             super().wheelEvent(event)
@@ -258,7 +258,7 @@ class ImageViewer(QGraphicsView):
 
         event.accept()
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         """Handle clicks on detections to emit weed_clicked signal."""
         item = self.itemAt(event.position().toPoint())
         if isinstance(item, DetectionGraphicsItem):

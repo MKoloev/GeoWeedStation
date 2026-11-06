@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 import pytest
 
 from geo_weed_station.config.settings import MapSettings
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
 from geo_weed_station.core.map_engine.heatmap import KdeHeatmap
 from geo_weed_station.core.map_engine.projector import NadirProjector
-from geo_weed_station.core.map_engine.weed_map import MapEngine, WeedMap
+from geo_weed_station.core.map_engine.weed_map import MapEngine
 from geo_weed_station.schemas.entities import (
     BBox,
     CameraSpatialPose,

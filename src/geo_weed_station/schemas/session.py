@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -26,7 +26,7 @@ class FileEntry(BaseModel):
     size_bytes: int = 0
     status: ProcessingStatus = ProcessingStatus.PENDING
     has_xmp: bool = False
-    detections_count: Optional[int] = None
+    detections_count: int | None = None
 
 
 class SessionState(BaseModel):
@@ -35,7 +35,7 @@ class SessionState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: int = 1
-    source_kind: Optional[str] = None
-    source_path: Optional[str] = None
+    source_kind: str | None = None
+    source_path: str | None = None
     run_inference: bool = False
-    entries: List[FileEntry] = Field(default_factory=list)
+    entries: list[FileEntry] = Field(default_factory=list)

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
-from typing import Dict, List, Literal, Optional, Protocol, runtime_checkable
+from pathlib import Path
+from typing import Literal, Protocol, runtime_checkable
 
 import cv2
 
@@ -25,12 +25,12 @@ SourceKind = Literal["image", "folder", "video", "drone_run"]
 class FrameSource(Protocol):
     """Provider of file entries and decoded frame payloads."""
 
-    def entries(self) -> List[FileEntry]: ...
+    def entries(self) -> list[FileEntry]: ...
 
     def load(self, entry: FileEntry) -> FramePayload: ...
 
 
-def scan_images(root: Path) -> List[Path]:
+def scan_images(root: Path) -> list[Path]:
     """Recursively list supported image files in deterministic order."""
     root = Path(root)
     found = [
@@ -64,7 +64,7 @@ class ImageSource:
         if not self.path.is_file():
             raise FileNotFoundError(f"Image not found: {self.path}")
 
-    def entries(self) -> List[FileEntry]:
+    def entries(self) -> list[FileEntry]:
         return [_entry_for(self.path)]
 
     def load(self, entry: FileEntry) -> FramePayload:
@@ -79,7 +79,7 @@ class FolderSource:
         if not self.path.is_dir():
             raise NotADirectoryError(f"Folder not found: {self.path}")
 
-    def entries(self) -> List[FileEntry]:
+    def entries(self) -> list[FileEntry]:
         return [_entry_for(p) for p in scan_images(self.path)]
 
     def load(self, entry: FileEntry) -> FramePayload:
@@ -94,7 +94,7 @@ class VideoSource:
         if not self.path.is_file():
             raise FileNotFoundError(f"Video not found: {self.path}")
 
-    def entries(self) -> List[FileEntry]:
+    def entries(self) -> list[FileEntry]:
         return [_entry_for(self.path)]
 
     def load(self, entry: FileEntry) -> FramePayload:
@@ -129,7 +129,7 @@ class DroneRunSource:
         self.path = Path(path)
         if not self.path.is_dir():
             raise NotADirectoryError(f"Run directory not found: {self.path}")
-        self._summary: Optional[SummaryDetections] = None
+        self._summary: SummaryDetections | None = None
         summary_path = self.path / self.SUMMARY_NAME
         if summary_path.is_file():
             try:
@@ -138,17 +138,17 @@ class DroneRunSource:
                 )
             except Exception:
                 self._summary = None
-        self._counts: Dict[int, int] = {}
+        self._counts: dict[int, int] = {}
         if self._summary is not None:
             self._counts = {it.wp_index: len(it.detections) for it in self._summary.items}
 
     @staticmethod
-    def _wp_index(path: Path) -> Optional[int]:
+    def _wp_index(path: Path) -> int | None:
         m = _WP_RE.search(path.stem)
         return int(m.group(1)) if m else None
 
-    def entries(self) -> List[FileEntry]:
-        result: List[FileEntry] = []
+    def entries(self) -> list[FileEntry]:
+        result: list[FileEntry] = []
         for p in scan_images(self.path):
             entry = _entry_for(p)
             idx = self._wp_index(p)

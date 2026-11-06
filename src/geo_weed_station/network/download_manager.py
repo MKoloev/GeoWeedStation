@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Callable, List, Optional
 import zipfile
+from collections.abc import Callable
+from pathlib import Path
 
 from geo_weed_station.network.drone_client import DroneClient
 from geo_weed_station.network.exceptions import DownloadCancelled
@@ -29,8 +29,8 @@ class DownloadManager:
     def download_run(
         self,
         run_id: str,
-        progress_cb: Optional[Callable[[int, Optional[int]], None]] = None,
-        cancel_flag: Optional[Callable[[], bool]] = None,
+        progress_cb: Callable[[int, int | None], None] | None = None,
+        cancel_flag: Callable[[], bool] | None = None,
     ) -> Path:
         """Download mission ZIP archive with chunked streaming and atomic renaming.
         
@@ -109,13 +109,13 @@ class DownloadManager:
 
         return run_dir
 
-    def list_images(self, run_dir: Path) -> List[Path]:
+    def list_images(self, run_dir: Path) -> list[Path]:
         """Scan directory recursively for supported aerial imagery formats."""
         run_dir = Path(run_dir)
         if not run_dir.is_dir():
             return []
 
-        images: List[Path] = []
+        images: list[Path] = []
         for p in run_dir.rglob("*"):
             if p.is_file() and p.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS:
                 images.append(p)

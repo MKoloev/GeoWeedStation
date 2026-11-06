@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import pytest
 from PySide6.QtWidgets import QDialogButtonBox, QMessageBox
 
 from geo_weed_station.schemas.entities import CoordinateSystem

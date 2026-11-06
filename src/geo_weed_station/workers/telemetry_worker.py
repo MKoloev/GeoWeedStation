@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import time
-from typing import Optional
+
 from PySide6.QtCore import QTimer, Signal, Slot
 
 from geo_weed_station.config.settings import NetworkSettings
 from geo_weed_station.network.backoff import ExponentialBackoff
 from geo_weed_station.network.drone_client import DroneClient
-from geo_weed_station.network.exceptions import DroneApiError, DroneConnectionError, DroneTimeoutError
-from geo_weed_station.schemas.telemetry import ConnectionState, DroneStatus
+from geo_weed_station.network.exceptions import (
+    DroneApiError,
+    DroneConnectionError,
+    DroneTimeoutError,
+)
+from geo_weed_station.schemas.telemetry import ConnectionState
 from geo_weed_station.workers.base_worker import ManagedWorker
 
 
@@ -35,7 +39,7 @@ class TelemetryWorker(ManagedWorker):
             max_s=settings.reconnect_backoff_max_s,
         )
         self._connection_state = ConnectionState.DISCONNECTED
-        self._timer: Optional[QTimer] = None
+        self._timer: QTimer | None = None
         self._is_querying = False
 
     @Slot(str, int)
