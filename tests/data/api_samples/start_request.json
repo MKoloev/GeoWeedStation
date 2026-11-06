@@ -1,0 +1,10 @@
+{
+  "coordinate_system": "aruco_local",
+  "use_nn": true,
+  "save_policy": "all",
+  "waypoints": [
+    { "x": 0.0, "y": 0.0, "z": 1.5, "yaw": 0.0 },
+    { "x": 1.2, "y": 0.0, "z": 1.5, "yaw": 0.0 },
+    { "x": 1.2, "y": 1.2, "z": 1.5, "yaw": 1.57 }
+  ]
+}

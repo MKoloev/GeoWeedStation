@@ -1,0 +1,94 @@
+/* GeoWeedStation dark theme */
+* {
+    font-family: "Inter", "Segoe UI", "Noto Sans", sans-serif;
+    font-size: 13px;
+}
+
+QMainWindow, QWidget {
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+QToolBar {
+    background-color: #111c33;
+    border: none;
+    border-bottom: 1px solid #1e293b;
+    spacing: 6px;
+    padding: 4px 8px;
+}
+
+QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: #cbd5e1;
+}
+QToolButton:hover { background-color: #1e293b; }
+QToolButton:checked {
+    background-color: #134e4a;
+    border-color: #2dd4bf;
+    color: #99f6e4;
+}
+
+QMenuBar { background-color: #111c33; }
+QMenuBar::item:selected { background-color: #1e293b; }
+QMenu { background-color: #111c33; border: 1px solid #1e293b; }
+QMenu::item:selected { background-color: #134e4a; }
+
+QTabWidget::pane { border: 1px solid #1e293b; border-radius: 6px; top: -1px; }
+QTabBar::tab {
+    background-color: #111c33;
+    padding: 8px 18px;
+    border: 1px solid #1e293b;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+    color: #94a3b8;
+}
+QTabBar::tab:selected { background-color: #0f172a; color: #5eead4; }
+QTabBar::tab:hover:!selected { color: #e2e8f0; }
+
+QDockWidget { color: #94a3b8; }
+QDockWidget::title {
+    background-color: #111c33;
+    padding: 6px;
+    border-bottom: 1px solid #1e293b;
+}
+
+QPushButton {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 5px 14px;
+}
+QPushButton:hover { background-color: #334155; }
+QPushButton:disabled { color: #475569; background-color: #162033; }
+
+QProgressBar {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    text-align: center;
+    height: 16px;
+}
+QProgressBar::chunk { background-color: #14b8a6; border-radius: 5px; }
+
+QStatusBar { background-color: #111c33; border-top: 1px solid #1e293b; }
+
+QLabel#mapLockedLabel {
+    color: #fbbf24;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 24px;
+}
+QLabel#tabPlaceholder { color: #475569; font-size: 15px; }
+
+QLabel#connectionIndicator { font-weight: 600; }
+QLabel#connectionIndicator[state="connected"] { color: #4ade80; }
+QLabel#connectionIndicator[state="connecting"] { color: #fbbf24; }
+QLabel#connectionIndicator[state="reconnecting"] { color: #fb923c; }
+QLabel#connectionIndicator[state="timeout"] { color: #f87171; }
+QLabel#connectionIndicator[state="error"] { color: #ef4444; }
+QLabel#connectionIndicator[state="disconnected"] { color: #64748b; }

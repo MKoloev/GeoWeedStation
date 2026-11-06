@@ -1,0 +1,19 @@
+{
+  "preset": "clever4_csi_onnx",
+  "flight_state": "flying_to_wp",
+  "current_wp_index": 2,
+  "total_waypoints": 3,
+  "current_pose": {
+    "x": 1.18,
+    "y": 0.45,
+    "z": 1.51,
+    "roll": 0.01,
+    "pitch": -0.02,
+    "yaw": 0.05,
+    "coordinate_system": "aruco_local",
+    "timestamp": 1793892622.412
+  },
+  "captures_count": 1,
+  "is_data_ready": false,
+  "active_run_id": "run_20261105_153022"
+}

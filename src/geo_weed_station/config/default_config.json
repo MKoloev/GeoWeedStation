@@ -1,0 +1,27 @@
+{
+  "network": {
+    "host": "192.168.4.1",
+    "port": 8000,
+    "request_timeout_s": 2.0,
+    "poll_rate_hz": 1.0,
+    "reconnect_backoff_initial_s": 1.0,
+    "reconnect_backoff_max_s": 10.0,
+    "reconnect_backoff_factor": 2.0,
+    "download_chunk_bytes": 65536
+  },
+  "detector": {
+    "model_path": "models/weed_detection_yolo.onnx",
+    "classes_path": "models/classes.json",
+    "confidence_threshold": 0.25,
+    "nms_iou_threshold": 0.45,
+    "input_size": [640, 640],
+    "video_frame_skip": 3
+  },
+  "map": {
+    "heatmap_cell_m": 0.5,
+    "critical_density_threshold": 5.0,
+    "max_local_extent_m": 3.0,
+    "wgs84_origin": null
+  },
+  "workdir": "workdir"
+}

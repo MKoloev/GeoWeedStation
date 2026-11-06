@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geo-weed-station"
+version = "0.1.0"
+description = "Operator Ground Control Station for agronomic weed monitoring and UAV mission management"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "GeoWeedStation Team"}
+]
+dependencies = [
+    "PySide6>=6.5.0",
+    "onnxruntime>=1.15.0",
+    "opencv-python-headless>=4.8.0",
+    "numpy>=1.24.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "requests>=2.31.0",
+    "pyproj>=3.6.0",
+    "scipy>=1.11.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-qt>=4.2.0",
+    "pytest-cov>=4.1.0",
+    "pyinstaller>=6.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+
+[project.scripts]
+geo-weed-station = "geo_weed_station.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"geo_weed_station.ui" = ["resources/*.qss", "resources/icons/*.svg"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra -q -p no:launch_testing -p no:launch_testing_ros"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests",
+    "nfr: marks tests as non-functional requirements benchmarks",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_unused_configs = true
+disallow_untyped_defs = false

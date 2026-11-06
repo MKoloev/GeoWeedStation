@@ -1,0 +1,10 @@
+[
+  {
+    "run_id": "run_20261105_153022",
+    "start_time": "2026-11-05T15:30:22Z",
+    "status": "completed",
+    "directory_path": "/home/pi/agrovision_onboard/runs/run_20261105_153022",
+    "size_bytes": 48234496,
+    "contents": ["images", "detections_json", "manifest"]
+  }
+]
