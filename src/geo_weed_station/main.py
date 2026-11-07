@@ -70,13 +70,13 @@ def main(argv: Sequence[str] | None = None, run_event_loop: bool = False) -> int
     from PySide6.QtWidgets import QApplication
 
     from geo_weed_station.controllers.app_controller import AppController
-    from geo_weed_station.ui.theme import load_stylesheet
+    from geo_weed_station.ui.theme import apply_theme
 
     app = QApplication.instance()
     if app is None:
         qt_args = [sys.argv[0]] + list(argv if argv is not None else sys.argv[1:])
         app = QApplication(qt_args)
-    app.setStyleSheet(load_stylesheet())
+    apply_theme(app)
 
     controller = AppController(settings)
 
