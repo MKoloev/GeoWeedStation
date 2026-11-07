@@ -23,8 +23,10 @@ from geo_weed_station.core.source_factory import (
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
     FolderSource,
+    ImageSource,
     load_image_payload,
 )
+from geo_weed_station.core.xmp_parser import has_xmp
 from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.payload import FramePayload
 from geo_weed_station.schemas.session import FileEntry
@@ -166,7 +168,7 @@ class OfflineController(QObject):
     # -------------------------------------------------------------------------
     @Slot()
     def open_image(self) -> None:
-        """Open a single image file, display in viewer, parse XMP, and run detection."""
+        """Open a single image file, populate file list panel and preview without auto-inference."""
         exts = " ".join(f"*{e}" for e in IMAGE_EXTENSIONS)
         path, _ = QFileDialog.getOpenFileName(
             self._window, "Открыть изображение", str(self._settings.workdir), f"Images ({exts})"
@@ -175,39 +177,22 @@ class OfflineController(QObject):
             return
 
         file_path = Path(path)
-        self._window.status_bar_panel.set_message(f"Чтение {file_path.name}...")
+        self._current_source_folder = file_path.parent
+        self._detections_by_path.clear()
+        self._map_ctrl.reset()
+        self.map_info_panel.clear_selection()
         self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
 
         try:
-            self._map_ctrl.reset()
-            self.map_info_panel.clear_selection()
+            size = file_path.stat().st_size if file_path.is_file() else 0
+            has_xmp_flag = has_xmp(file_path) if file_path.is_file() else False
+            entry = FileEntry(path=str(file_path), size_bytes=size, has_xmp=has_xmp_flag)
 
-            # 1. Load image and XMP metadata
-            payload = load_image_payload(file_path)
-            if payload.image is not None:
-                self.image_viewer.set_image(payload.image)
-
-            # 2. Run inference if detector available
-            try:
-                detector = self._detector_factory()
-                detector.load()
-                detections = detector.detect(payload.image) if payload.image is not None else []
-                payload = payload.model_copy(update={"detections": detections})
-                self.image_viewer.set_detections(detections)
-                if payload.source_path:
-                    self._detections_by_path[payload.source_path] = list(detections)
-                    self._detections_by_path[str(Path(payload.source_path))] = list(detections)
-
-                # Collect class names for filter panel
-                class_names = sorted({d.class_name for d in detections})
-                if class_names:
-                    self.filter_panel.set_classes(class_names)
-            except Exception as det_err:
-                logger.warning("Local inference failed: %s", det_err)
-
-            # 3. Ingest into MapEngine
-            self._map_ctrl.on_frame(payload)
-            self._window.status_bar_panel.set_message(f"Файл {file_path.name} успешно загружен")
+            self.file_list_panel.set_entries([entry])
+            self._load_entry_to_viewer(entry)
+            self._window.status_bar_panel.set_message(
+                f"Изображение {file_path.name} загружено. Нажмите «⚡ Запустить обработку» для анализа."
+            )
         except Exception as exc:
             logger.exception("Failed to open image: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка открытия файла: {exc}")
@@ -260,6 +245,10 @@ class OfflineController(QObject):
             self._video_worker.request_stop()
             self._video_worker = None
 
+        self._map_ctrl.reset()
+        self.map_info_panel.clear_selection()
+        self._detections_by_path.clear()
+
         try:
             worker = VideoWorker(
                 detector_factory=self._detector_factory,
@@ -284,7 +273,9 @@ class OfflineController(QObject):
             self._window.register_thread(thread, worker)
 
             worker.open(path)
-            self._window.status_bar_panel.set_message(f"Видео {Path(path).name} готово к просмотру")
+            self._window.status_bar_panel.set_message(
+                f"Видео {Path(path).name} загружено. Нажмите «▶ Воспроизведение и обработка» для старта."
+            )
         except Exception as exc:
             logger.exception("Failed to initialize video worker: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка открытия видео: {exc}")
@@ -304,8 +295,11 @@ class OfflineController(QObject):
         self._map_ctrl.reset()
         self.map_info_panel.clear_selection()
 
-        source_folder = self._current_source_folder or Path(entries[0].path).parent
-        source = FolderSource(source_folder)
+        if len(entries) == 1 and Path(entries[0].path).is_file():
+            source = ImageSource(Path(entries[0].path))
+        else:
+            source_folder = self._current_source_folder or Path(entries[0].path).parent
+            source = FolderSource(source_folder)
 
         worker = BatchImageWorker(
             source=source,

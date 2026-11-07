@@ -185,7 +185,7 @@ class VideoPlayerWidget(QWidget):
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(8)
 
-        self.btn_play_pause = QPushButton("▶ Воспроизведение", self)
+        self.btn_play_pause = QPushButton("▶ Воспроизведение и обработка", self)
         self.btn_play_pause.clicked.connect(self._on_play_pause_clicked)
         controls_layout.addWidget(self.btn_play_pause)
 
@@ -233,7 +233,7 @@ class VideoPlayerWidget(QWidget):
         if is_playing:
             self.btn_play_pause.setText("⏸ Пауза")
         else:
-            self.btn_play_pause.setText("▶ Воспроизведение")
+            self.btn_play_pause.setText("▶ Воспроизведение и обработка")
 
     def apply_filter(self, state: DetectionFilterState) -> None:
         """Pass filter state down to canvas."""

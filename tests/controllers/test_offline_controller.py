@@ -205,3 +205,36 @@ def test_offline_controller_new_folder_resets_map_and_statistics(offline_setup, 
     assert ctrl.map_info_panel.lbl_total_weeds.text() == "1"
 
 
+def test_offline_controller_single_image_pipeline_processes_on_button(offline_setup, qtbot):
+    ctrl, map_ctrl, window, tmp_path = offline_setup
+    qtbot.addWidget(window)
+
+    from tests.helpers.make_media import make_real_jpeg
+    from tests.helpers.make_xmp_image import SAMPLE_XMP_LOCAL_ARUCO
+    from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
+
+    single_img = tmp_path / "single_test.jpg"
+    make_real_jpeg(single_img, SAMPLE_XMP_LOCAL_ARUCO)
+
+    entry = FileEntry(path=str(single_img), size_bytes=single_img.stat().st_size, has_xmp=True)
+    ctrl.file_list_panel.set_entries([entry])
+    ctrl._load_entry_to_viewer(entry)
+
+    # 1. Before clicking process: not detected yet, status is PENDING
+    assert ctrl.file_list_panel.model.rowCount() == 1
+    assert ctrl.file_list_panel.model.index(0, 2).data() == "Ожидание"
+    assert ctrl.file_list_panel.model.index(0, 4).data() == "-"
+    assert len(ctrl.image_viewer._detection_items) == 0
+
+    # 2. Click process
+    ctrl.start_batch()
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+
+    # 3. After process: status is DONE, weeds count is 1, detections overlay visible
+    assert ctrl.file_list_panel.model.index(0, 2).data() == "Готово"
+    assert ctrl.file_list_panel.model.index(0, 4).data() == "1"
+    assert len(ctrl.image_viewer._detection_items) == 1
+    assert map_ctrl.engine.statistics().total_weeds == 1
+
+
+
