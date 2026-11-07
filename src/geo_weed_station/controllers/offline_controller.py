@@ -25,6 +25,7 @@ from geo_weed_station.core.source_factory import (
     FolderSource,
     load_image_payload,
 )
+from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.payload import FramePayload
 from geo_weed_station.schemas.session import FileEntry
 from geo_weed_station.ui.app_mode import AppMode
@@ -82,6 +83,7 @@ class OfflineController(QObject):
         self._batch_worker: BatchImageWorker | None = None
         self._video_worker: VideoWorker | None = None
         self._current_source_folder: Path | None = None
+        self._detections_by_path: dict[str, list[DetectedWeed]] = {}
 
         self._embed_widgets_in_ui()
         self._wire_signals()
@@ -128,6 +130,7 @@ class OfflineController(QObject):
         # File list panel
         self.file_list_panel.file_selected.connect(self._on_file_selected)
         self.file_list_panel.process_requested.connect(self.start_batch)
+        self.file_list_panel.cleared.connect(self._on_file_list_cleared)
 
         # Filters & Model selection
         self.filter_panel.filter_changed.connect(self.on_filter_changed)
@@ -187,6 +190,9 @@ class OfflineController(QObject):
                 detections = detector.detect(payload.image) if payload.image is not None else []
                 payload = payload.model_copy(update={"detections": detections})
                 self.image_viewer.set_detections(detections)
+                if payload.source_path:
+                    self._detections_by_path[payload.source_path] = list(detections)
+                    self._detections_by_path[str(Path(payload.source_path))] = list(detections)
 
                 # Collect class names for filter panel
                 class_names = sorted({d.class_name for d in detections})
@@ -213,6 +219,7 @@ class OfflineController(QObject):
 
         folder_path = Path(folder)
         self._current_source_folder = folder_path
+        self._detections_by_path.clear()
         self._window.status_bar_panel.set_message(f"Сканирование каталога {folder_path.name}...")
 
         try:
@@ -287,6 +294,8 @@ class OfflineController(QObject):
             self._window.status_bar_panel.set_message("Пакетный список файлов пуст")
             return
 
+        self._detections_by_path.clear()
+
         source_folder = self._current_source_folder or Path(entries[0].path).parent
         source = FolderSource(source_folder)
 
@@ -341,6 +350,7 @@ class OfflineController(QObject):
     def _on_file_selected(self, row: int) -> None:
         entry = self.file_list_panel.model.entry_at(row)
         if entry is not None:
+            self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
             self._load_entry_to_viewer(entry)
 
     def _load_entry_to_viewer(self, entry: FileEntry) -> None:
@@ -349,8 +359,16 @@ class OfflineController(QObject):
             if path.is_file():
                 arr = read_image(path)
                 self.image_viewer.set_image(arr)
+                detections = self._detections_by_path.get(
+                    str(path), self._detections_by_path.get(entry.path, [])
+                )
+                self.image_viewer.set_detections(detections)
         except Exception as exc:
             logger.warning("Could not preview file %s: %s", entry.path, exc)
+
+    def _on_file_list_cleared(self) -> None:
+        self._detections_by_path.clear()
+        self.image_viewer.clear()
 
     def _on_batch_progress(self, index: int, total: int, status_text: str) -> None:
         pct = int(round((index / float(max(1, total))) * 100))
@@ -358,6 +376,36 @@ class OfflineController(QObject):
         self._window.status_bar_panel.set_message(f"[{index}/{total}] {status_text}")
 
     def _on_batch_frame_processed(self, payload: FramePayload) -> None:
+        # Cache detections for viewer
+        if payload.source_path:
+            norm_path = str(Path(payload.source_path))
+            detections = list(payload.detections)
+            self._detections_by_path[norm_path] = detections
+            self._detections_by_path[payload.source_path] = detections
+
+            # Update entry in table model
+            for row, entry in enumerate(self.file_list_panel.model.entries):
+                if entry.path in (payload.source_path, norm_path):
+                    has_xmp = payload.has_georef() or (payload.pose is not None)
+                    self.file_list_panel.update_entry_metadata(
+                        row, has_xmp=has_xmp, detections_count=len(detections)
+                    )
+                    break
+
+            # If currently selected item is this file, update detection overlay immediately
+            selected = self.file_list_panel.selected_entry()
+            if selected is not None and selected.path in (payload.source_path, norm_path):
+                self.image_viewer.set_detections(detections)
+
+        # Merge classes into filter panel
+        if payload.detections:
+            new_classes = {d.class_name for d in payload.detections if d.class_name}
+            if new_classes:
+                existing = set(self.filter_panel._class_names)
+                combined = sorted(existing | new_classes)
+                if combined != self.filter_panel._class_names:
+                    self.filter_panel.set_classes(combined)
+
         # Ingest into map engine
         self._map_ctrl.on_frame(payload)
 

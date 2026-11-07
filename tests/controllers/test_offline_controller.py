@@ -108,3 +108,50 @@ def test_offline_controller_model_switching(offline_setup, qtbot):
     assert "Corn" in ctrl.filter_panel._class_names
     assert "Sunflower" in ctrl.filter_panel._class_names
     assert "custom_weed.onnx" in window.status_bar_panel.message_text
+
+
+def test_offline_controller_batch_and_row_selection_displays_detections(offline_setup, qtbot):
+    ctrl, _map_ctrl, window, tmp_path = offline_setup
+    qtbot.addWidget(window)
+
+    from geo_weed_station.core.source_factory import FolderSource
+    from tests.helpers.dataset_factory import make_dataset
+
+    data_dir = tmp_path / "survey_batch"
+    make_dataset(data_dir, n_valid=2, n_no_xmp=0, n_broken=0)
+
+    src = FolderSource(data_dir)
+    ctrl._current_source_folder = data_dir
+    ctrl.file_list_panel.set_entries(src.entries())
+
+    assert ctrl.file_list_panel.model.rowCount() == 2
+
+    # Start batch processing
+    ctrl.start_batch()
+    assert ctrl._batch_worker is not None
+
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+
+    # 1. Check detections cache is populated
+    assert len(ctrl._detections_by_path) >= 2
+
+    # 2. Check table column detections count
+    det_val_0 = ctrl.file_list_panel.model.index(0, 4).data()
+    det_val_1 = ctrl.file_list_panel.model.index(1, 4).data()
+    assert det_val_0 == "1"
+    assert det_val_1 == "1"
+
+    # 3. Switching between images in table displays detections in viewer
+    ctrl.file_list_panel.table_view.selectRow(0)
+    assert len(ctrl.image_viewer._detection_items) == 1
+    assert ctrl.image_viewer._detection_items[0].weed.class_name == "Ambrosia"
+
+    ctrl.file_list_panel.table_view.selectRow(1)
+    assert len(ctrl.image_viewer._detection_items) == 1
+    assert ctrl.image_viewer._detection_items[0].weed.class_name == "Ambrosia"
+
+    # 4. Clear resets viewer and cache
+    ctrl.file_list_panel.clear()
+    assert len(ctrl._detections_by_path) == 0
+    assert len(ctrl.image_viewer._detection_items) == 0
+

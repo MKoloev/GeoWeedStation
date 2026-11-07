@@ -128,6 +128,28 @@ class FileTableModel(QAbstractTableModel):
             bottom_right = self.index(row, COL_STATUS)
             self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.DisplayRole])
 
+    def update_detections_count(self, row: int, count: int) -> None:
+        """Update detections count of a file entry at the given row."""
+        if 0 <= row < len(self._entries):
+            self._entries[row].detections_count = count
+            idx = self.index(row, COL_DETECTIONS)
+            self.dataChanged.emit(idx, idx, [Qt.ItemDataRole.DisplayRole])
+
+    def update_entry_metadata(
+        self,
+        row: int,
+        has_xmp: bool,
+        detections_count: int | None = None,
+    ) -> None:
+        """Update XMP existence flag and optional detections count at row."""
+        if 0 <= row < len(self._entries):
+            self._entries[row].has_xmp = has_xmp
+            if detections_count is not None:
+                self._entries[row].detections_count = detections_count
+            top_left = self.index(row, COL_XMP)
+            bottom_right = self.index(row, COL_DETECTIONS)
+            self.dataChanged.emit(top_left, bottom_right, [Qt.ItemDataRole.DisplayRole])
+
     def update_entry(self, row: int, entry: FileEntry) -> None:
         """Update entire file entry at row (e.g. after extraction or inference)."""
         if 0 <= row < len(self._entries):

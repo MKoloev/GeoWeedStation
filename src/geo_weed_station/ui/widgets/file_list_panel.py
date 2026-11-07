@@ -30,6 +30,7 @@ class FileListPanel(QWidget):
 
     file_selected = Signal(int)  # Emitted with row index when user selects an item
     process_requested = Signal()  # Emitted when user clicks 'Start Processing'
+    cleared = Signal()  # Emitted when file table is cleared
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -96,6 +97,19 @@ class FileListPanel(QWidget):
         """Update file processing status at row."""
         self._model.update_status(row, status)
 
+    def update_detections_count(self, row: int, count: int) -> None:
+        """Update file detection count at row."""
+        self._model.update_detections_count(row, count)
+
+    def update_entry_metadata(
+        self,
+        row: int,
+        has_xmp: bool,
+        detections_count: int | None = None,
+    ) -> None:
+        """Update entry XMP flag and detection count at row."""
+        self._model.update_entry_metadata(row, has_xmp, detections_count)
+
     def update_entry(self, row: int, entry: FileEntry) -> None:
         """Update entire file entry at row."""
         self._model.update_entry(row, entry)
@@ -121,6 +135,7 @@ class FileListPanel(QWidget):
     def clear(self) -> None:
         """Clear table entries."""
         self._model.clear()
+        self.cleared.emit()
 
     # -------------------------------------------------------------------------
     # Event handlers
