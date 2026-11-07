@@ -237,4 +237,27 @@ def test_offline_controller_single_image_pipeline_processes_on_button(offline_se
     assert map_ctrl.engine.statistics().total_weeds == 1
 
 
+def test_offline_controller_open_video_and_reopen(offline_setup, qtbot, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    from tests.helpers.make_media import make_mp4
+
+    ctrl, _map_ctrl, win, tmp_path = offline_setup
+    qtbot.addWidget(win)
+
+    vid1 = make_mp4(tmp_path / "v1.mp4", n_frames=5, fps=25)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args, **kwargs: (str(vid1), "Videos (*.mp4)"))
+
+    ctrl.open_video()
+    assert ctrl._video_worker is not None
+    assert "v1.mp4" in win.status_bar_panel.label_message.text()
+
+    # Re-open the same or another video
+    ctrl.open_video()
+    assert ctrl._video_worker is not None
+    assert "v1.mp4" in win.status_bar_panel.label_message.text()
+
+    if ctrl._video_worker:
+        ctrl._video_worker.request_stop()
+
+
 

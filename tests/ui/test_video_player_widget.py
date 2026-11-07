@@ -46,6 +46,24 @@ def test_video_player_playback_signals(qtbot):
     assert "Воспроизведение" in player.btn_play_pause.text()
 
 
+def test_video_player_play_at_end_rewinds(qtbot):
+    player = VideoPlayerWidget()
+    qtbot.addWidget(player)
+
+    seeks = []
+    plays = []
+    player.seek_requested.connect(seeks.append)
+    player.play_requested.connect(lambda: plays.append(True))
+
+    player.set_position(9, 10)
+    player.set_playing(False)
+
+    player.btn_play_pause.click()
+    assert seeks == [0]
+    assert plays == [True]
+    assert "Пауза" in player.btn_play_pause.text()
+
+
 def test_video_player_timeline_and_seek(qtbot):
     player = VideoPlayerWidget()
     qtbot.addWidget(player)

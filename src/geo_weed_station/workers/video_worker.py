@@ -42,6 +42,7 @@ class VideoWorker(ManagedWorker):
         self._last_dets: list[DetectedWeed] = []
         self._inflight = FrameQueue(maxlen=max_inflight)
         self.dropped_frames = 0
+        self._at_eof = False
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
 
@@ -74,7 +75,9 @@ class VideoWorker(ManagedWorker):
             return False
         ok, frame = self._cap.read()
         if not ok or frame is None:
+            self._at_eof = True
             return False
+        self._at_eof = False
         index = self._next_index
         self._next_index += 1
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -120,6 +123,7 @@ class VideoWorker(ManagedWorker):
         self._fps = fps if fps > 1e-3 else 25.0
         self._next_index = 0
         self._last_dets = []
+        self._at_eof = False
         self._step(force_inference=True)
 
     @Slot(str)
@@ -131,6 +135,8 @@ class VideoWorker(ManagedWorker):
     def play(self) -> None:
         if self._cap is None:
             return
+        if self._at_eof or (self._total > 0 and self._next_index >= self._total):
+            self.seek(0)
         self._timer.start(max(1, int(1000.0 / self._fps)))
 
     @Slot()
@@ -142,9 +148,11 @@ class VideoWorker(ManagedWorker):
     def seek(self, frame_index: int) -> None:
         if self._cap is None:
             return
+        self._inflight.clear()
         target = max(0, min(int(frame_index), max(0, self._total - 1)))
         self._cap.set(cv2.CAP_PROP_POS_FRAMES, target)
         self._next_index = target
+        self._at_eof = False
         self._step(force_inference=True)
 
     @Slot(int)

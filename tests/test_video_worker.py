@@ -58,6 +58,24 @@ def test_play_to_end(tmp_path: Path, qtbot):
     w.close_resources()
 
 
+def test_replay_after_reaching_end(tmp_path: Path, qtbot):
+    vid = make_mp4(tmp_path / "v.mp4", n_frames=10, fps=100)
+    w = VideoWorker()
+    rec = _connect(w)
+    w.open(str(vid))
+    w.play()
+    qtbot.waitUntil(lambda: len(rec["ended"]) == 1, timeout=5000)
+    assert not w.is_playing
+    assert rec["pos"][-1] == (9, 10)
+
+    # Replay after EOF: should rewind to 0 and play through all frames again
+    w.play()
+    qtbot.waitUntil(lambda: len(rec["ended"]) == 2, timeout=5000)
+    second_pass = [p[0] for p in rec["pos"][10:]]
+    assert second_pass == list(range(10))
+    w.close_resources()
+
+
 def test_pause_and_seek(tmp_path: Path, qtbot):
     vid = make_mp4(tmp_path / "v.mp4", n_frames=10, fps=10)
     w = VideoWorker()

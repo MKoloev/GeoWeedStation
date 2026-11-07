@@ -257,12 +257,12 @@ class VideoPlayerWidget(QWidget):
     # -------------------------------------------------------------------------
     def _on_play_pause_clicked(self) -> None:
         if self._is_playing:
-            self._is_playing = False
-            self.btn_play_pause.setText("▶ Воспроизведение")
+            self.set_playing(False)
             self.pause_requested.emit()
         else:
-            self._is_playing = True
-            self.btn_play_pause.setText("⏸ Пауза")
+            if self._total_frames > 0 and self._current_frame >= self._total_frames - 1:
+                self.seek_requested.emit(0)
+            self.set_playing(True)
             self.play_requested.emit()
 
     def _on_slider_pressed(self) -> None:

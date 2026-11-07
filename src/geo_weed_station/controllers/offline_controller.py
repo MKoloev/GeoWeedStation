@@ -240,11 +240,24 @@ class OfflineController(QObject):
         self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_VIDEO))
         self._window.status_bar_panel.set_message(f"Открытие видео {Path(path).name}...")
 
-        # Stop previous video worker if active
+        # Stop previous video worker if active and disconnect prior signals
         if self._video_worker is not None:
-            self._video_worker.request_stop()
+            old_worker = self._video_worker
+            for sig, slot in (
+                (self.video_player.play_requested, old_worker.play),
+                (self.video_player.pause_requested, old_worker.pause),
+                (self.video_player.seek_requested, old_worker.seek),
+                (self.video_player.frame_skip_changed, old_worker.set_frame_skip),
+                (self.video_player.frame_consumed, old_worker.frame_consumed),
+            ):
+                try:
+                    sig.disconnect(slot)
+                except (RuntimeError, TypeError):
+                    pass
+            old_worker.request_stop()
             self._video_worker = None
 
+        self.video_player.clear()
         self._map_ctrl.reset()
         self.map_info_panel.clear_selection()
         self._detections_by_path.clear()
@@ -261,7 +274,8 @@ class OfflineController(QObject):
             worker.frame_ready.connect(self.video_player.show_frame)
             self.video_player.frame_consumed.connect(worker.frame_consumed)
             worker.position_changed.connect(self.video_player.set_position)
-            worker.playback_ended.connect(lambda: self.video_player.set_playing(False))
+            worker.playback_ended.connect(self._on_video_playback_ended)
+            worker.failed.connect(lambda msg: self._window.status_bar_panel.set_message(f"Ошибка видео: {msg}"))
 
             self.video_player.play_requested.connect(worker.play)
             self.video_player.pause_requested.connect(worker.pause)
@@ -279,6 +293,10 @@ class OfflineController(QObject):
         except Exception as exc:
             logger.exception("Failed to initialize video worker: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка открытия видео: {exc}")
+
+    def _on_video_playback_ended(self) -> None:
+        self.video_player.set_playing(False)
+        self._window.status_bar_panel.set_message("Воспроизведение видео завершено.")
 
     # -------------------------------------------------------------------------
     # Batch Processing
