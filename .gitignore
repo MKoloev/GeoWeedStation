@@ -51,3 +51,4 @@ workdir/cache/
 # Project Runtime Artifacts & User Data
 workdir/*
 !workdir/.gitkeep
+models/

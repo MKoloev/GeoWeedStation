@@ -257,6 +257,7 @@ class OfflineController(QObject):
 
             # Connect signals
             worker.frame_ready.connect(self.video_player.show_frame)
+            self.video_player.frame_consumed.connect(worker.frame_consumed)
             worker.position_changed.connect(self.video_player.set_position)
             worker.playback_ended.connect(lambda: self.video_player.set_playing(False))
 
@@ -269,7 +270,7 @@ class OfflineController(QObject):
             thread = start_in_thread(worker, "video_worker_thread")
             self._window.register_thread(thread, worker)
 
-            worker.open_video(path)
+            worker.open(path)
             self._window.status_bar_panel.set_message(f"Видео {Path(path).name} готово к просмотру")
         except Exception as exc:
             logger.exception("Failed to initialize video worker: %s", exc)

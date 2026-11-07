@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import cv2
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot, QMetaObject, Qt, Q_ARG
 
 from geo_weed_station.core.detector_base import BaseDetector
 from geo_weed_station.schemas.entities import DetectedWeed
@@ -103,10 +103,13 @@ class VideoWorker(ManagedWorker):
     @Slot(str)
     def open(self, path: str) -> None:
         """Open a video file and show its first frame."""
+        if self.thread() != QThread.currentThread():
+            QMetaObject.invokeMethod(self, "open", Qt.ConnectionType.QueuedConnection, Q_ARG(str, str(path)))
+            return
         self._timer.stop()
         self._release_capture()
         self._inflight.clear()
-        cap = cv2.VideoCapture(path)
+        cap = cv2.VideoCapture(str(path))
         if not cap.isOpened():
             cap.release()
             self.failed.emit(f"Cannot open video: {path}")
@@ -118,6 +121,11 @@ class VideoWorker(ManagedWorker):
         self._next_index = 0
         self._last_dets = []
         self._step(force_inference=True)
+
+    @Slot(str)
+    def open_video(self, path: str) -> None:
+        """Alias for open(path)."""
+        self.open(path)
 
     @Slot()
     def play(self) -> None:
@@ -172,3 +180,8 @@ class VideoWorker(ManagedWorker):
     @Slot()
     def request_stop(self) -> None:
         super().request_stop()
+        self._inflight.clear()
+        if self.thread() != QThread.currentThread():
+            QMetaObject.invokeMethod(self, "close_resources", Qt.ConnectionType.QueuedConnection)
+        else:
+            self.close_resources()

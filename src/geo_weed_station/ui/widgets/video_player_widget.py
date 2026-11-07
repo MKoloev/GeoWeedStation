@@ -145,6 +145,7 @@ class VideoPlayerWidget(QWidget):
     pause_requested = Signal()
     seek_requested = Signal(int)
     frame_skip_changed = Signal(int)
+    frame_consumed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -209,6 +210,7 @@ class VideoPlayerWidget(QWidget):
     def show_frame(self, frame: np.ndarray, detections: list[DetectedWeed]) -> None:
         """Render a single video frame with detections."""
         self.canvas.set_frame(frame, detections)
+        self.frame_consumed.emit()
 
     @Slot(int, int)
     def set_position(self, current: int, total: int) -> None:
