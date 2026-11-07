@@ -154,6 +154,10 @@ def resolve_classes_path(model_path: Path, fallback_classes_path: Path | None = 
     4. classes.json in model directory
     """
     model_path = Path(model_path)
+    if not model_path.is_file():
+        candidate_model = get_models_dir() / model_path.name
+        if candidate_model.is_file():
+            model_path = candidate_model
     model_dir = model_path.parent
     stem = model_path.stem
 
@@ -169,6 +173,9 @@ def resolve_classes_path(model_path: Path, fallback_classes_path: Path | None = 
         fb = Path(fallback_classes_path)
         if fb.is_file():
             return fb
+        fb_candidate = model_dir / fb.name
+        if fb_candidate.is_file():
+            return fb_candidate
 
     candidate3 = model_dir / "classes.json"
     if candidate3.is_file():
@@ -224,7 +231,12 @@ class OnnxDetector(BaseDetector):
         self._session: ort.InferenceSession | None = None
         self._input_name: str | None = None
         self._output_names: list[str] = []
-        self._classes = load_class_names(self.settings.classes_path)
+        classes_p = Path(self.settings.classes_path)
+        if not classes_p.is_file():
+            cand_cls = get_models_dir() / classes_p.name
+            if cand_cls.is_file():
+                classes_p = cand_cls
+        self._classes = load_class_names(classes_p)
         self.confidence_threshold = float(self.settings.confidence_threshold)
         self.nms_iou_threshold = float(self.settings.nms_iou_threshold)
 
@@ -250,7 +262,11 @@ class OnnxDetector(BaseDetector):
 
         model_path = Path(self.settings.model_path)
         if not model_path.is_file():
-            raise DetectionError(f"ONNX model file not found: {model_path}")
+            cand_model = get_models_dir() / model_path.name
+            if cand_model.is_file():
+                model_path = cand_model
+            else:
+                raise DetectionError(f"ONNX model file not found: {model_path}")
 
         if self._custom_providers:
             providers = self._custom_providers

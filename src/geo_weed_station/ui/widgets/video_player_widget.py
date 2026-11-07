@@ -125,7 +125,7 @@ class VideoFrameCanvas(QWidget):
             rect = QRectF(rx, ry, rw, rh)
             painter.drawRect(rect)
 
-            # Draw label
+            # Draw label with contrasting dark background badge
             label_parts: list[str] = []
             if self._filter_state.show_labels:
                 label_parts.append(weed.class_name)
@@ -134,8 +134,15 @@ class VideoFrameCanvas(QWidget):
 
             if label_parts:
                 text = " ".join(label_parts)
+                metrics = painter.fontMetrics()
+                text_rect = metrics.boundingRect(text)
+                bg_w = text_rect.width() + 8.0
+                bg_h = text_rect.height() + 4.0
+                bg_x = rx
+                bg_y = max(offset_y, ry - bg_h)
+                painter.fillRect(QRectF(bg_x, bg_y, bg_w, bg_h), QColor(0, 0, 0, 180))
                 painter.setPen(Qt.GlobalColor.white)
-                painter.drawText(QPointF(rx + 2.0, max(12.0, ry - 3.0)), text)
+                painter.drawText(QPointF(bg_x + 4.0, bg_y + text_rect.height() - 1.0), text)
 
 
 class VideoPlayerWidget(QWidget):

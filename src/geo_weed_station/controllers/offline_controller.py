@@ -71,6 +71,7 @@ class OfflineController(QObject):
         self._window = window
         self._map_ctrl = map_ctrl
         self._settings = settings
+        self._has_custom_detector_factory = detector_factory is not None
         self._detector_factory = detector_factory or (lambda: OnnxDetector(settings.detector))
 
         # Instantiate UI widgets
@@ -90,6 +91,7 @@ class OfflineController(QObject):
         self._embed_widgets_in_ui()
         self._wire_signals()
         self._init_models_in_ui()
+        self.on_filter_changed(self.filter_panel.current_state())
 
     # -------------------------------------------------------------------------
     # Setup & Wiring
@@ -99,11 +101,29 @@ class OfflineController(QObject):
         active_model = Path(self._settings.detector.model_path)
         models_dir = get_models_dir(active_model)
         available = scan_available_models(models_dir)
-        self.filter_panel.set_available_models(available, active=active_model)
 
-        classes_p = resolve_classes_path(active_model, self._settings.detector.classes_path)
+        # Resolve active_model to an absolute path if possible
+        resolved_model = active_model
+        if not resolved_model.is_file():
+            candidate = models_dir / active_model.name
+            if candidate.is_file():
+                resolved_model = candidate
+            elif available:
+                resolved_model = available[0]
+
+        self.filter_panel.set_available_models(available, active=resolved_model)
+
+        classes_p = resolve_classes_path(resolved_model, self._settings.detector.classes_path)
         if classes_p.is_file():
             self.filter_panel.load_classes_from_file(classes_p)
+
+        if resolved_model.is_file():
+            updated_det = self._settings.detector.model_copy(
+                update={"model_path": resolved_model, "classes_path": classes_p}
+            )
+            self._settings = self._settings.model_copy(update={"detector": updated_det})
+            if not self._has_custom_detector_factory:
+                self._detector_factory = lambda: OnnxDetector(self._settings.detector)
 
     def apply_settings(self, settings: AppSettings) -> None:
         """Dynamically apply updated application settings and refresh model configuration."""
@@ -158,6 +178,9 @@ class OfflineController(QObject):
 
         if classes_path.is_file():
             self.filter_panel.load_classes_from_file(classes_path)
+
+        if self._video_worker is not None:
+            self._video_worker.set_detector_factory(self._detector_factory)
 
         self._window.status_bar_panel.set_message(
             f"Модель детекции переключена: {model_path.name} (классы: {classes_path.name})"

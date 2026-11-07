@@ -205,3 +205,29 @@ def test_runs_in_worker_thread(tmp_path: Path, qtbot):
         thread.quit()
         thread.wait(3000)
     assert FakeDetector.instances[0].closed
+
+
+def test_video_worker_with_onnx_detector_sample_video():
+    from geo_weed_station.config.settings import DetectorSettings
+    from geo_weed_station.core.onnx_detector import OnnxDetector, get_models_dir
+
+    models_dir = get_models_dir()
+    det_settings = DetectorSettings(
+        model_path=models_dir / "weed_detection_yolo.onnx",
+        classes_path=models_dir / "classes.json",
+    )
+    worker = VideoWorker(detector_factory=lambda: OnnxDetector(det_settings))
+
+    vid_path = Path(__file__).resolve().parent.parent / "workdir/sample_data/video/flight_sample.mp4"
+    if not vid_path.is_file():
+        pytest.skip("flight_sample.mp4 not found")
+
+    rec = []
+    worker.frame_ready.connect(lambda f, d: rec.append((f, d)))
+    worker.open(str(vid_path))
+
+    assert len(rec) == 1
+    frame, dets = rec[0]
+    assert len(dets) == 2
+    assert all(d.confidence >= 0.85 for d in dets)
+    worker.close_resources()

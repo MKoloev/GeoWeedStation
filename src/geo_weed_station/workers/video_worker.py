@@ -90,8 +90,7 @@ class VideoWorker(ManagedWorker):
                 if detector is not None:
                     self._last_dets = list(detector.detect(rgb))
             except Exception as exc:  # noqa: BLE001
-                self._detector_factory = None
-                self._last_dets = []
+                logger.error("Video inference failed on frame %d: %s", index, exc)
                 self.failed.emit(f"Inference failed: {exc}")
 
         self.position_changed.emit(index, self._total)
@@ -163,6 +162,18 @@ class VideoWorker(ManagedWorker):
     def frame_consumed(self) -> None:
         """UI acknowledgement that a frame has been rendered."""
         self._inflight.get(timeout=0)
+
+    @Slot(object)
+    def set_detector_factory(self, factory: Callable[[], BaseDetector] | None) -> None:
+        """Update detector factory dynamically and reload detector on next step."""
+        self._detector_factory = factory
+        if self._detector is not None:
+            try:
+                self._detector.close()
+            except Exception:
+                pass
+            self._detector = None
+        self._last_dets = []
 
     @Slot()
     def close_resources(self) -> None:
