@@ -64,40 +64,72 @@ GeoWeedStation/
 
 ### Требования
 * Python 3.10+
-* ОС Linux (Ubuntu 20.04/22.04+) или Windows 10/11
+* ОС Linux (Ubuntu 20.04/22.04/24.04+) или Windows 10/11
 
-### Установка зависимостей
+---
+
+### Автоматическая установка в один шаг
+
+Репозиторий включает кроссплатформенные скрипты, которые автоматически проверяют окружение, системные графические библиотеки (на Ubuntu), создают `.venv`, ставят зависимости и генерируют изолированные лаунчеры.
+
+#### Linux (Ubuntu/Debian)
 ```bash
-# Клонирование и переход в репозиторий
-cd GeoWeedStation
+# Развертывание окружения и генерация лаунчеров (в корне репозитория):
+./setup.sh
+# либо через каталог deploy:
+./deploy/setup_linux.sh
+```
 
+#### Windows 10/11
+```cmd
+:: Запуск в командной строке (CMD) в корне репозитория:
+setup.bat
+:: либо через каталог deploy:
+deploy\setup_windows.bat
+```
+
+---
+
+### Запуск приложения
+
+#### Linux:
+```bash
+# Стандартный запуск (с изоляцией Qt от конфликтов с темами GNOME/GTK/Wayland):
+./run_geoweed.sh
+
+# Запуск со встроенной самодиагностикой компонентов:
+./run_geoweed.sh --selftest
+
+# Headless запуск (без дисплея):
+./run_geoweed.sh --selftest --offscreen
+```
+
+#### Windows:
+```cmd
+:: Обычный запуск приложения (без консольного окна):
+run_geoweed.bat
+
+:: Отладочный запуск (с консольным окном и pause при сбоях):
+run_geoweed_debug.bat
+
+:: Запуск встроенной самодиагностики:
+run_geoweed_debug.bat --selftest --offscreen
+```
+
+---
+
+### Ручная установка (альтернативный способ)
+```bash
 # Создание и активация виртуального окружения
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # на Windows: .venv\Scripts\activate
 
 # Установка зависимостей и пакета в режиме разработки (editable)
 pip install --upgrade pip
-pip install -e .
-
-# Либо с зависимостями для тестов и сборщика:
 pip install -e ".[dev]"
-```
 
-### Запуск приложения
-```bash
-# Через установленную консольную команду:
-geo-weed-station
-
-# Либо напрямую через Python:
+# Запуск
 python main.py
-# или:
-python -m geo_weed_station
-
-# Запуск со встроенной самодиагностикой компонентов
-geo-weed-station --selftest
-
-# Запуск в headless (offscreen) режиме (например, на сервере без X11)
-geo-weed-station --offscreen
 ```
 
 ---

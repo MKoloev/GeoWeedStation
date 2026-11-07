@@ -52,3 +52,10 @@ workdir/cache/
 workdir/*
 !workdir/.gitkeep
 models/
+
+# Generated local launchers
+/run_geoweed.sh
+/geoweedstation.sh
+/run_geoweed.bat
+/run_geoweed_debug.bat
+/geoweedstation.bat
