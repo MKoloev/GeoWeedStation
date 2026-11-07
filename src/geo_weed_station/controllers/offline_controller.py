@@ -116,6 +116,7 @@ class OfflineController(QObject):
         self._window.set_tab_widget(TAB_MAP, self.map_canvas)
 
         # Install side panels for offline mode
+        self._window.clear_default_panels(AppMode.OFFLINE)
         self._window.add_mode_panel(AppMode.OFFLINE, self.file_list_panel, "Пакетные файлы")
         self._window.add_mode_panel(AppMode.OFFLINE, self.filter_panel, "Фильтры детекций")
         self._window.add_mode_panel(AppMode.OFFLINE, self.map_info_panel, "Статистика карты")

@@ -50,11 +50,31 @@ QTabBar::tab {
 QTabBar::tab:selected { background-color: #0f172a; color: #5eead4; }
 QTabBar::tab:hover:!selected { color: #e2e8f0; }
 
+QTabBar::tab:bottom {
+    border-top: none;
+    border-bottom: 1px solid #1e293b;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+QMainWindow::separator {
+    background-color: #1e293b;
+    width: 4px;
+    height: 4px;
+}
+QMainWindow::separator:hover {
+    background-color: #14b8a6;
+}
+
 QDockWidget { color: #94a3b8; }
 QDockWidget::title {
     background-color: #111c33;
-    padding: 6px;
+    padding: 6px 10px;
     border-bottom: 1px solid #1e293b;
+    font-weight: 600;
+    color: #cbd5e1;
 }
 
 QPushButton {

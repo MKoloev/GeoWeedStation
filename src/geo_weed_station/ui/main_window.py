@@ -202,8 +202,21 @@ class MainWindow(QMainWindow):
         dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
         dock.setWidget(widget)
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+        if self._panels[mode]:
+            first_dock = self._panels[mode][0]
+            self.tabifyDockWidget(first_dock, dock)
+            first_dock.raise_()
         self._panels[mode].append(dock)
         dock.setVisible(mode == self._mode_manager.mode)
+
+    def clear_default_panels(self, mode: AppMode) -> None:
+        """Remove initial placeholder panels for the given mode when real controllers mount."""
+        mode = AppMode(mode)
+        for dock in list(self._panels[mode]):
+            if isinstance(dock.widget(), QLabel):
+                self._panels[mode].remove(dock)
+                self.removeDockWidget(dock)
+                dock.deleteLater()
 
     def mode_panels(self, mode: AppMode) -> list[QDockWidget]:
         return list(self._panels[AppMode(mode)])
@@ -260,6 +273,8 @@ class MainWindow(QMainWindow):
         for m, docks in self._panels.items():
             for dock in docks:
                 dock.setVisible(m == mode)
+        if self._panels[mode]:
+            self._panels[mode][0].raise_()
         self.action_mode_online.setChecked(mode == AppMode.ONLINE)
         self.action_mode_offline.setChecked(mode == AppMode.OFFLINE)
         for act in self._offline_actions:
