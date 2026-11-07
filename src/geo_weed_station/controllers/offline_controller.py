@@ -178,6 +178,9 @@ class OfflineController(QObject):
         self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
 
         try:
+            self._map_ctrl.reset()
+            self.map_info_panel.clear_selection()
+
             # 1. Load image and XMP metadata
             payload = load_image_payload(file_path)
             if payload.image is not None:
@@ -220,6 +223,8 @@ class OfflineController(QObject):
         folder_path = Path(folder)
         self._current_source_folder = folder_path
         self._detections_by_path.clear()
+        self._map_ctrl.reset()
+        self.map_info_panel.clear_selection()
         self._window.status_bar_panel.set_message(f"Сканирование каталога {folder_path.name}...")
 
         try:
@@ -295,6 +300,8 @@ class OfflineController(QObject):
             return
 
         self._detections_by_path.clear()
+        self._map_ctrl.reset()
+        self.map_info_panel.clear_selection()
 
         source_folder = self._current_source_folder or Path(entries[0].path).parent
         source = FolderSource(source_folder)
@@ -369,6 +376,8 @@ class OfflineController(QObject):
     def _on_file_list_cleared(self) -> None:
         self._detections_by_path.clear()
         self.image_viewer.clear()
+        self._map_ctrl.reset()
+        self.map_info_panel.clear_selection()
 
     def _on_batch_progress(self, index: int, total: int, status_text: str) -> None:
         pct = int(round((index / float(max(1, total))) * 100))

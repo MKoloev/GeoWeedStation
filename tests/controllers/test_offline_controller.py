@@ -155,3 +155,53 @@ def test_offline_controller_batch_and_row_selection_displays_detections(offline_
     assert len(ctrl._detections_by_path) == 0
     assert len(ctrl.image_viewer._detection_items) == 0
 
+
+def test_offline_controller_new_folder_resets_map_and_statistics(offline_setup, qtbot):
+    ctrl, map_ctrl, window, tmp_path = offline_setup
+    qtbot.addWidget(window)
+
+    from geo_weed_station.core.source_factory import FolderSource
+    from tests.helpers.dataset_factory import make_dataset
+
+    # Batch 1: 2 valid images
+    batch1_dir = tmp_path / "batch1"
+    make_dataset(batch1_dir, n_valid=2, n_no_xmp=0, n_broken=0)
+
+    src1 = FolderSource(batch1_dir)
+    ctrl._current_source_folder = batch1_dir
+    ctrl.file_list_panel.set_entries(src1.entries())
+    ctrl.start_batch()
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+
+    # Statistics after batch 1: total_weeds == 2
+    assert len(map_ctrl.engine.weed_map.points) == 2
+    assert map_ctrl.engine.statistics().total_weeds == 2
+    assert ctrl.map_info_panel.lbl_total_weeds.text() == "2"
+
+    # Batch 2: 1 valid image in a new folder
+    batch2_dir = tmp_path / "batch2"
+    make_dataset(batch2_dir, n_valid=1, n_no_xmp=0, n_broken=0)
+
+    src2 = FolderSource(batch2_dir)
+    # Simulate loading new folder
+    ctrl._current_source_folder = batch2_dir
+    ctrl._detections_by_path.clear()
+    ctrl._map_ctrl.reset()
+    ctrl.map_info_panel.clear_selection()
+    ctrl.file_list_panel.set_entries(src2.entries())
+
+    # Map and statistics must be reset to 0
+    assert len(map_ctrl.engine.weed_map.points) == 0
+    assert map_ctrl.engine.statistics().total_weeds == 0
+    assert ctrl.map_info_panel.lbl_total_weeds.text() == "0"
+
+    # Process new batch
+    ctrl.start_batch()
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+
+    # Statistics after batch 2 must reflect ONLY batch 2 (total_weeds == 1, NOT 3)
+    assert len(map_ctrl.engine.weed_map.points) == 1
+    assert map_ctrl.engine.statistics().total_weeds == 1
+    assert ctrl.map_info_panel.lbl_total_weeds.text() == "1"
+
+
