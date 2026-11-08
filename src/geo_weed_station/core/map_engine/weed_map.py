@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from geo_weed_station.config.settings import MapSettings
+from geo_weed_station.core.map_engine.coordinates import CoordinateConverter
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
 from geo_weed_station.core.map_engine.heatmap import CountHeatmap, HeatmapAlgorithm
 from geo_weed_station.core.map_engine.projector import ProjectionStrategy, validate_georef
@@ -66,6 +67,18 @@ class MapEngine:
         self.weed_map = WeedMap()
         self._is_locked: bool = False
         self._current_grid: HeatmapGrid | None = None
+        self._wgs84_origin: tuple[float, float] | None = None
+        self._converter: CoordinateConverter | None = None
+
+    @property
+    def wgs84_origin(self) -> tuple[float, float] | None:
+        """Reference origin (latitude_0, longitude_0) for local metric projection in WGS84 mode."""
+        return self._wgs84_origin
+
+    def set_wgs84_origin(self, origin: tuple[float, float]) -> None:
+        """Explicitly set WGS84 origin (lat, lon) for local metric projection."""
+        self._wgs84_origin = origin
+        self._converter = CoordinateConverter(wgs84_origin=origin)
 
     def is_locked(self) -> bool:
         """Return True if mapping engine is locked due to missing georeferencing."""
@@ -76,6 +89,8 @@ class MapEngine:
         self.weed_map.clear()
         self._is_locked = False
         self._current_grid = None
+        self._wgs84_origin = None
+        self._converter = None
 
     def ingest_frame(self, payload: FramePayload) -> list[WeedPoint]:
         """Project detected weeds on frame and ingest them into WeedMap layer.
@@ -93,18 +108,43 @@ class MapEngine:
         projected_detections = self.projector.project(payload)
 
         new_points: list[WeedPoint] = []
+        is_wgs84 = payload.pose.coordinate_system == CoordinateSystem.WGS84
+
+        if is_wgs84 and self._wgs84_origin is None:
+            # Anchor local metric coordinate origin to first frame position (lat, lon)
+            self._wgs84_origin = (payload.pose.y, payload.pose.x)
+            self._converter = CoordinateConverter(wgs84_origin=self._wgs84_origin)
+
         for det in projected_detections:
             if det.world_x is None or det.world_y is None:
                 continue
-            wp = WeedPoint(
-                weed_id=det.weed_id,
-                class_name=det.class_name,
-                confidence=det.confidence,
-                x=det.world_x,
-                y=det.world_y,
-                coord_system=payload.pose.coordinate_system,
-                source_frame=payload.frame_id,
-            )
+
+            if is_wgs84:
+                assert self._converter is not None
+                weed_lon = det.world_x
+                weed_lat = det.world_y
+                local_x, local_y = self._converter.wgs84_to_local(lat=weed_lat, lon=weed_lon)
+                wp = WeedPoint(
+                    weed_id=det.weed_id,
+                    class_name=det.class_name,
+                    confidence=det.confidence,
+                    x=round(local_x, 3),
+                    y=round(local_y, 3),
+                    coord_system=CoordinateSystem.WGS84,
+                    source_frame=payload.frame_id,
+                    lat=round(weed_lat, 8),
+                    lon=round(weed_lon, 8),
+                )
+            else:
+                wp = WeedPoint(
+                    weed_id=det.weed_id,
+                    class_name=det.class_name,
+                    confidence=det.confidence,
+                    x=det.world_x,
+                    y=det.world_y,
+                    coord_system=CoordinateSystem.LOCAL_ARUCO,
+                    source_frame=payload.frame_id,
+                )
             new_points.append(wp)
 
         self.weed_map.add_points(new_points)
@@ -123,17 +163,39 @@ class MapEngine:
                 )
 
             assert p.pose is not None
+            is_wgs84 = p.pose.coordinate_system == CoordinateSystem.WGS84
+            if is_wgs84 and self._wgs84_origin is None:
+                self._wgs84_origin = (p.pose.y, p.pose.x)
+                self._converter = CoordinateConverter(wgs84_origin=self._wgs84_origin)
+
             for det in p.detections:
                 if det.world_x is not None and det.world_y is not None:
-                    wp = WeedPoint(
-                        weed_id=det.weed_id,
-                        class_name=det.class_name,
-                        confidence=det.confidence,
-                        x=det.world_x,
-                        y=det.world_y,
-                        coord_system=p.pose.coordinate_system,
-                        source_frame=p.frame_id,
-                    )
+                    if is_wgs84:
+                        assert self._converter is not None
+                        weed_lon = det.world_x
+                        weed_lat = det.world_y
+                        local_x, local_y = self._converter.wgs84_to_local(lat=weed_lat, lon=weed_lon)
+                        wp = WeedPoint(
+                            weed_id=det.weed_id,
+                            class_name=det.class_name,
+                            confidence=det.confidence,
+                            x=round(local_x, 3),
+                            y=round(local_y, 3),
+                            coord_system=CoordinateSystem.WGS84,
+                            source_frame=p.frame_id,
+                            lat=round(weed_lat, 8),
+                            lon=round(weed_lon, 8),
+                        )
+                    else:
+                        wp = WeedPoint(
+                            weed_id=det.weed_id,
+                            class_name=det.class_name,
+                            confidence=det.confidence,
+                            x=det.world_x,
+                            y=det.world_y,
+                            coord_system=p.pose.coordinate_system,
+                            source_frame=p.frame_id,
+                        )
                     all_new_points.append(wp)
 
         self.weed_map.add_points(all_new_points)

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from geo_weed_station.schemas.entities import CoordinateSystem
 from geo_weed_station.schemas.map_models import MapStatistics, WeedPoint
 
 logger = logging.getLogger(__name__)
@@ -136,7 +137,10 @@ class MapInfoPanel(QWidget):
         self.lbl_point_id.setText(point.weed_id)
         self.lbl_point_class.setText(point.class_name)
         self.lbl_point_conf.setText(f"{point.confidence * 100.0:.1f} %")
-        self.lbl_point_coords.setText(f"X: {point.x:.3f}, Y: {point.y:.3f}")
+        if point.coord_system == CoordinateSystem.WGS84 and point.lat is not None and point.lon is not None:
+            self.lbl_point_coords.setText(f"GPS: {point.lat:.6f}°, {point.lon:.6f}° (X={point.x:.1f}m, Y={point.y:.1f}m)")
+        else:
+            self.lbl_point_coords.setText(f"X: {point.x:.3f} m, Y: {point.y:.3f} m")
         self.lbl_point_frame.setText(point.source_frame)
 
         if thumbnail is not None and thumbnail.size > 0:

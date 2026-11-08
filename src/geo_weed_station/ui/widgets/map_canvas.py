@@ -67,7 +67,14 @@ class WeedGraphicsPointItem(QGraphicsEllipseItem):
         self.setBrush(QBrush(color))
         self.setAcceptHoverEvents(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(f"{point.class_name} ({point.confidence:.2f})\nX: {point.x:.2f}, Y: {point.y:.2f}")
+        if point.coord_system == CoordinateSystem.WGS84 and point.lat is not None and point.lon is not None:
+            self.setToolTip(
+                f"{point.class_name} ({point.confidence:.2f})\n"
+                f"GPS: {point.lat:.7f}°, {point.lon:.7f}°\n"
+                f"Local: X={point.x:.1f} m, Y={point.y:.1f} m"
+            )
+        else:
+            self.setToolTip(f"{point.class_name} ({point.confidence:.2f})\nX: {point.x:.2f} m, Y: {point.y:.2f} m")
 
 
 class MapCanvas(QGraphicsView):

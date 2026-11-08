@@ -160,3 +160,119 @@ def test_heatmap_strategy_substitution(map_engine: MapEngine):
     assert map_engine.heatmap_algo.__class__.__name__ == "CountHeatmap"
     map_engine.heatmap_algo = KdeHeatmap(bandwidth_m=0.8)
     assert map_engine.heatmap_algo.__class__.__name__ == "KdeHeatmap"
+
+
+def test_wgs84_local_metric_projection_and_heatmap(map_engine: MapEngine, tmp_path: Path):
+    """Verify that WGS84 frames are projected into local metric space under the hood.
+    
+    Verifies:
+    1. Origin is anchored to first frame's GPS position.
+    2. WeedPoint.x and y are in meters; lat and lon are in degrees.
+    3. Heatmap grid has proper metric resolution and does not collapse to 1x1.
+    4. ConvexHull area is calculated in real square meters.
+    5. CSV and GeoJSON exports output GPS coordinates.
+    """
+    import numpy as np
+    from geo_weed_station.core.map_engine.exporter import MapExporter
+
+    optics = SensorOptics(focal_length_mm=40.0, sensor_width_mm=8.57, sensor_height_mm=6.43)
+
+    # Frame 1: origin
+    pose_1 = CameraSpatialPose(
+        coordinate_system=CoordinateSystem.WGS84,
+        x=55.304049,  # lon
+        y=51.777788,  # lat
+        altitude_m=10.0,
+        roll_deg=0.0,
+        pitch_deg=-90.0,
+        yaw_deg=-178.0,
+    )
+    w1 = DetectedWeed(
+        weed_id="w1",
+        class_id=0,
+        class_name="weed_dicot",
+        confidence=0.9,
+        bbox=BBox(x=0.5, y=0.5, w=0.05, h=0.05),
+    )
+    f1 = FramePayload(
+        frame_id="frame_0001",
+        image_size_px=(8192, 6144),
+        pose=pose_1,
+        optics=optics,
+        detections=[w1],
+    )
+
+    # Frame 2: ~50 meters South
+    pose_2 = CameraSpatialPose(
+        coordinate_system=CoordinateSystem.WGS84,
+        x=55.304066,  # lon
+        y=51.777339,  # lat (diff 0.000449 deg ~= 50 m)
+        altitude_m=10.0,
+        roll_deg=0.0,
+        pitch_deg=-90.0,
+        yaw_deg=-178.0,
+    )
+    w2 = DetectedWeed(
+        weed_id="w2",
+        class_id=1,
+        class_name="weed_monocot",
+        confidence=0.88,
+        bbox=BBox(x=0.5, y=0.5, w=0.05, h=0.05),
+    )
+    f2 = FramePayload(
+        frame_id="frame_0002",
+        image_size_px=(8192, 6144),
+        pose=pose_2,
+        optics=optics,
+        detections=[w2],
+    )
+
+    pts1 = map_engine.ingest_frame(f1)
+    pts2 = map_engine.ingest_frame(f2)
+
+    assert map_engine.wgs84_origin == (51.777788, 55.304049)
+    assert len(map_engine.weed_map.points) == 2
+
+    p1, p2 = map_engine.weed_map.points
+
+    # Point 1 is at Origin (0, 0 meters)
+    assert p1.x == pytest.approx(0.0, abs=0.5)
+    assert p1.y == pytest.approx(0.0, abs=0.5)
+    assert p1.lat == pytest.approx(51.777788, abs=1e-5)
+    assert p1.lon == pytest.approx(55.304049, abs=1e-5)
+
+    # Point 2 is ~50 meters South (Y ~ -50m)
+    assert p2.x == pytest.approx(1.17, abs=1.0)
+    assert p2.y == pytest.approx(-49.9, abs=1.0)
+    assert p2.lat == pytest.approx(51.777339, abs=1e-5)
+    assert p2.lon == pytest.approx(55.304066, abs=1e-5)
+
+    # Spatial bounds are in meters
+    bounds = map_engine.weed_map.bounds(margin_m=1.0)
+    assert bounds.height == pytest.approx(52.0, abs=2.0)  # ~50m distance + 2m margin
+
+    # Heatmap resolution: with cell_m=1.0, rows should be ~52, NOT 1
+    grid = map_engine.build_heatmap(cell_m=1.0)
+    assert grid.matrix.shape[0] >= 45
+    assert np.sum(grid.matrix) == 2.0
+
+    # Statistics: area and density
+    stats = map_engine.statistics()
+    assert stats.total_weeds == 2
+    assert stats.surveyed_area_m2 >= 1.0
+
+    # Exports
+    exporter = MapExporter()
+    csv_file = tmp_path / "wgs_weeds.csv"
+    geojson_file = tmp_path / "wgs_weeds.geojson"
+    exporter.to_csv(map_engine.weed_map, csv_file)
+    exporter.to_geojson(map_engine.weed_map, geojson_file)
+
+    # Verify CSV has GPS coordinates
+    csv_text = csv_file.read_text(encoding="utf-8")
+    assert "55.3040" in csv_text
+    assert "51.7777" in csv_text
+
+    # Verify GeoJSON has EPSG:4326 coords [lon, lat]
+    doc = json.loads(geojson_file.read_text(encoding="utf-8"))
+    assert doc["features"][0]["geometry"]["coordinates"] == [pytest.approx(55.304048, abs=1e-5), pytest.approx(51.777788, abs=1e-5)]

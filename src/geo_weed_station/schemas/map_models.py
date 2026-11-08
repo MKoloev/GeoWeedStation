@@ -39,10 +39,12 @@ class WeedPoint(BaseModel):
     weed_id: str
     class_name: str
     confidence: float
-    x: float  # Metres (local_aruco) or Longitude (wgs84)
-    y: float  # Metres (local_aruco) or Latitude (wgs84)
+    x: float  # Metres in local metric plane (local_aruco or local metric projection when wgs84)
+    y: float  # Metres in local metric plane
     coord_system: CoordinateSystem
     source_frame: str
+    lat: float | None = None  # Global WGS84 Latitude in degrees
+    lon: float | None = None  # Global WGS84 Longitude in degrees
 
 
 class HeatmapGrid(BaseModel):

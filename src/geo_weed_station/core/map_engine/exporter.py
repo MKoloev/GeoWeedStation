@@ -47,13 +47,20 @@ class MapExporter:
                 ]
             )
             for pt in pts:
+                if pt.coord_system == CoordinateSystem.WGS84 and pt.lon is not None and pt.lat is not None:
+                    out_x = f"{pt.lon:.8f}"
+                    out_y = f"{pt.lat:.8f}"
+                else:
+                    out_x = f"{pt.x:.6f}"
+                    out_y = f"{pt.y:.6f}"
+
                 writer.writerow(
                     [
                         pt.weed_id,
                         pt.class_name,
                         f"{pt.confidence:.4f}",
-                        f"{pt.x:.6f}",
-                        f"{pt.y:.6f}",
+                        out_x,
+                        out_y,
                         pt.coord_system.value,
                         pt.source_frame,
                     ]
@@ -68,11 +75,16 @@ class MapExporter:
 
         features = []
         for pt in pts:
+            if pt.coord_system == CoordinateSystem.WGS84 and pt.lon is not None and pt.lat is not None:
+                coords = [round(pt.lon, 8), round(pt.lat, 8)]
+            else:
+                coords = [round(pt.x, 6), round(pt.y, 6)]
+
             feat = {
                 "type": "Feature",
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [round(pt.x, 6), round(pt.y, 6)],
+                    "coordinates": coords,
                 },
                 "properties": {
                     "weed_id": pt.weed_id,

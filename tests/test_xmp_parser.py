@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import builtins
+import struct
 import time
 from pathlib import Path
 
 import pytest
 
 from geo_weed_station.core.exceptions import (
+    XmpError,
     XmpMalformedError,
     XmpNotFoundError,
 )
 from geo_weed_station.core.xmp_parser import (
+    _XMP_JPEG_HEADER,
     build_frame_payload,
     extract_spatial_data,
     has_xmp,
@@ -221,3 +224,61 @@ def test_build_frame_payload_safe_fallback(tmp_path: Path):
     payload_valid = build_frame_payload(with_xmp, image_size_px=(1920, 1080))
     assert payload_valid.pose is not None
     assert payload_valid.has_georef() is True
+
+
+def test_exif_subifd_optics_priority_over_xmp(tmp_path: Path):
+    """Verify that optics parameters from EXIF SubIFD take precedence over XMP."""
+    from PIL import Image
+
+    # 1. Create a JPEG image with PIL having standard EXIF tags
+    img_path = tmp_path / "exif_and_xmp.jpg"
+    img = Image.new("RGB", (800, 600), color=(100, 150, 200))
+    exif = img.getexif()
+    sub_ifd = exif.get_ifd(34665)  # 0x8769 = ExifOffset / SubIFD
+    sub_ifd[37386] = 40.0  # FocalLength
+    sub_ifd[41989] = 168  # FocalLengthIn35mmFilm
+    img.save(img_path, "JPEG", exif=exif)
+
+    # 2. Inject an XMP packet with a conflicting focal length (PerspectiveFocalLength="10.0")
+    # and auxiliary optical metadata (PrincipalPoint, BandName)
+    xmp_with_conflict = """<x:xmpmeta xmlns:x="adobe:ns:meta/">
+      <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+        <rdf:Description
+            xmlns:drone-dji="http://www.dji.com/drone-dji/1.0/"
+            xmlns:Camera="http://pix4d.com/camera/1.0/"
+            xmlns:agro="http://geosaero.ru/agro/1.0/"
+            drone-dji:RelativeAltitude="+10.0"
+            drone-dji:GimbalYawDegree="0.0"
+            drone-dji:GimbalPitchDegree="-90.0"
+            drone-dji:GimbalRollDegree="0.0"
+            Camera:PerspectiveFocalLength="10.0"
+            Camera:PrincipalPoint="400.0,300.0"
+            Camera:BandName="RGB"
+            agro:CoordinateSystem="wgs84"
+            drone-dji:GpsLatitude="51.77"
+            drone-dji:GpsLongitude="55.30"/>
+      </rdf:RDF>
+    </x:xmpmeta>"""
+
+    # Append or inject XMP APP1 marker
+    raw_bytes = img_path.read_bytes()
+    xmp_payload = _XMP_JPEG_HEADER + xmp_with_conflict.encode("utf-8")
+    app1_marker = b"\xff\xe1" + struct.pack(">H", len(xmp_payload) + 2) + xmp_payload
+    # Insert right after SOI (2 bytes)
+    img_path.write_bytes(raw_bytes[:2] + app1_marker + raw_bytes[2:])
+
+    data = extract_spatial_data(img_path, image_size_px=(800, 600))
+    assert data.pose is not None
+    assert data.optics is not None
+
+    # Priority check: EXIF focal length (40.0 mm) should win over XMP (10.0 mm)
+    assert data.optics.focal_length_mm == 40.0
+
+    # Sensor dimensions derived from 35mm equivalent focal (168mm -> CropFactor 4.2)
+    expected_sw = round(36.0 / 4.2, 3)
+    assert data.optics.sensor_width_mm == pytest.approx(expected_sw, abs=0.01)
+    assert data.optics.sensor_height_mm == pytest.approx(round(expected_sw * (600 / 800), 3), abs=0.01)
+
+    # Auxiliary tags merged from XMP
+    assert data.optics.principal_point_px == (400.0, 300.0)
+    assert data.optics.band_names == ["RGB"]

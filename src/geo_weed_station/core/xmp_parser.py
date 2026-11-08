@@ -175,7 +175,69 @@ def read_xmp_packet(path: Path) -> str:
     raise XmpNotFoundError(f"Unsupported image format or missing XMP in {path.name}")
 
 
-def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
+def extract_exif_optics(path: Path, image_size_px: tuple[int, int] | None = None) -> SensorOptics | None:
+    """Extract camera optical parameters from standard EXIF tags.
+    
+    Priority check:
+    1. EXIF SubIFD (tag 34665 / 0x8769):
+       - FocalLength (tag 37386 / 0x920A)
+       - FocalLengthIn35mmFilm (tag 41989 / 0xA405)
+    2. Main IFD FocalLength
+    Calculates physical sensor_width_mm and sensor_height_mm when 35mm equivalent focal is available.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return None
+
+    try:
+        from PIL import Image
+
+        with Image.open(path) as im:
+            exif = im.getexif()
+            if not exif:
+                return None
+
+            sub_ifd = exif.get_ifd(34665)  # 0x8769 = ExifOffset / SubIFD
+            focal_raw = sub_ifd.get(37386) if sub_ifd else None
+            if focal_raw is None:
+                focal_raw = exif.get(37386)
+
+            if focal_raw is None:
+                return None
+
+            focal_length_mm = float(focal_raw)
+            if focal_length_mm <= 0.0:
+                return None
+
+            focal_35_raw = sub_ifd.get(41989) if sub_ifd else None
+            if focal_35_raw is None:
+                focal_35_raw = exif.get(41989)
+
+            w_px, h_px = image_size_px if image_size_px is not None else im.size
+            sensor_w: float | None = None
+            sensor_h: float | None = None
+
+            if focal_35_raw is not None and float(focal_35_raw) > 0.0:
+                focal_35 = float(focal_35_raw)
+                crop_factor = focal_35 / focal_length_mm
+                if crop_factor > 0.0:
+                    sensor_w = round(36.0 / crop_factor, 3)
+                    sensor_h = round(sensor_w * (h_px / w_px), 3)
+
+            return SensorOptics(
+                focal_length_mm=focal_length_mm,
+                sensor_width_mm=sensor_w,
+                sensor_height_mm=sensor_h,
+            )
+    except Exception:
+        return None
+
+
+def parse_xmp(
+    xmp_xml: str | Path,
+    image_path: Path | None = None,
+    image_size_px: tuple[int, int] | None = None,
+) -> XmpSpatialData:
     """Parse raw XMP XML string or extract and parse from image path.
     
     Supports both attribute-based and child-element-based RDF representations.
@@ -185,7 +247,8 @@ def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
         XmpNotFoundError: if image path has no XMP metadata.
     """
     if isinstance(xmp_xml, Path) or (isinstance(xmp_xml, str) and not xmp_xml.strip().startswith("<") and Path(xmp_xml).exists()):
-        xmp_xml = read_xmp_packet(Path(xmp_xml))
+        image_path = Path(xmp_xml)
+        xmp_xml = read_xmp_packet(image_path)
 
     try:
         root = ET.fromstring(xmp_xml)
@@ -285,26 +348,61 @@ def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
                     yaw_deg=yaw_deg,
                 )
 
-    # 4. Parse Optics parameters
-    optics: SensorOptics | None = None
-    focal_val = raw_tags.get("PerspectiveFocalLength")
-    if focal_val is not None:
-        try:
-            focal_length_mm = float(focal_val)
-            principal_point: tuple[float, float] | None = None
-            pp_val = raw_tags.get("PrincipalPoint")
-            if pp_val:
-                parts = pp_val.split(",")
-                if len(parts) == 2:
-                    principal_point = (float(parts[0].strip()), float(parts[1].strip()))
+    # 4. Parse Optics parameters (multi-field priority: EXIF SubIFD > XMP tags)
+    exif_optics: SensorOptics | None = None
+    if image_path is not None:
+        exif_optics = extract_exif_optics(Path(image_path), image_size_px=image_size_px)
 
-            band_names: list[str] = []
-            band_val = raw_tags.get("BandName")
-            if band_val:
-                band_names = [b.strip() for b in band_val.split(",") if b.strip()]
+    # Check multiple candidate tags in XMP
+    xmp_focal_raw = (
+        raw_tags.get("PerspectiveFocalLength")
+        or raw_tags.get("CalibratedFocalLength")
+        or raw_tags.get("FocalLength")
+    )
+    xmp_sw_raw = raw_tags.get("SensorWidth")
+    xmp_sh_raw = raw_tags.get("SensorHeight")
+    xmp_fov_h = raw_tags.get("FovHorizontal") or raw_tags.get("HorizontalFOV")
+    xmp_fov_v = raw_tags.get("FovVertical") or raw_tags.get("VerticalFOV")
+
+    principal_point: tuple[float, float] | None = None
+    pp_val = raw_tags.get("PrincipalPoint")
+    if pp_val:
+        parts = pp_val.split(",")
+        if len(parts) == 2:
+            try:
+                principal_point = (float(parts[0].strip()), float(parts[1].strip()))
+            except ValueError:
+                principal_point = None
+
+    band_names: list[str] = []
+    band_val = raw_tags.get("BandName")
+    if band_val:
+        band_names = [b.strip() for b in band_val.split(",") if b.strip()]
+
+    optics: SensorOptics | None = None
+
+    if exif_optics is not None:
+        # Standard EXIF SubIFD takes precedence
+        optics = exif_optics.model_copy(
+            update={
+                "principal_point_px": principal_point or exif_optics.principal_point_px,
+                "band_names": band_names or exif_optics.band_names,
+            }
+        )
+    elif xmp_focal_raw is not None:
+        try:
+            focal_length_mm = float(xmp_focal_raw)
+            sw_mm = float(xmp_sw_raw) if xmp_sw_raw is not None else None
+            sh_mm = float(xmp_sh_raw) if xmp_sh_raw is not None else None
+            fov_h = float(xmp_fov_h) if xmp_fov_h is not None else None
+            fov_v = float(xmp_fov_v) if xmp_fov_v is not None else None
 
             optics = SensorOptics(
                 focal_length_mm=focal_length_mm,
+                fov_h_deg=fov_h,
+                fov_v_deg=fov_v,
+                sensor_width_mm=sw_mm,
+                sensor_height_mm=sh_mm,
                 principal_point_px=principal_point,
                 band_names=band_names,
             )
@@ -318,10 +416,13 @@ def parse_xmp(xmp_xml: str | Path) -> XmpSpatialData:
     )
 
 
-def extract_spatial_data(path: Path) -> XmpSpatialData:
+def extract_spatial_data(
+    path: Path,
+    image_size_px: tuple[int, int] | None = None,
+) -> XmpSpatialData:
     """Extract and parse spatial data directly from image file path."""
     xml_packet = read_xmp_packet(path)
-    return parse_xmp(xml_packet)
+    return parse_xmp(xml_packet, image_path=path, image_size_px=image_size_px)
 
 
 def has_xmp(path: Path) -> bool:
@@ -344,7 +445,7 @@ def build_frame_payload(path: Path, image_size_px: tuple[int, int]) -> FramePayl
     optics: SensorOptics | None = None
 
     try:
-        spatial_data = extract_spatial_data(path)
+        spatial_data = extract_spatial_data(path, image_size_px=image_size_px)
         pose = spatial_data.pose
         optics = spatial_data.optics
     except Exception:
