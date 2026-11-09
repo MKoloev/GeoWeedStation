@@ -266,3 +266,163 @@ def test_resolve_classes_path_and_scan(tmp_path: Path):
     c_global = models_dir / "classes.json"
     c_global.write_text('{"0": "Global"}')
     assert resolve_classes_path(m3) == c_global
+
+
+def test_load_model_classes_and_type(tmp_path: Path):
+    """Verify parsing classes and model_type across flat and structured JSON formats."""
+    from geo_weed_station.core.onnx_detector import ModelType, load_model_classes_and_type
+
+    # 1. Flat JSON with explicit model_type
+    f1 = tmp_path / "model1.json"
+    f1.write_text('{"model_type": "yolox", "0": "plant"}', encoding="utf-8")
+    cls1, type1 = load_model_classes_and_type(f1)
+    assert cls1 == {0: "plant"}
+    assert type1 == ModelType.YOLOX.value
+
+    # 2. Structured JSON with nested classes and architecture
+    f2 = tmp_path / "model2.json"
+    f2.write_text('{"architecture": "yolo", "classes": {"0": "weed_a", "1": "weed_b"}}', encoding="utf-8")
+    cls2, type2 = load_model_classes_and_type(f2)
+    assert cls2 == {0: "weed_a", 1: "weed_b"}
+    assert type2 == ModelType.YOLO.value
+
+    # 3. Simple JSON without explicit model_type
+    f3 = tmp_path / "model3.json"
+    f3.write_text('{"0": "plant"}', encoding="utf-8")
+    cls3, type3 = load_model_classes_and_type(f3)
+    assert cls3 == {0: "plant"}
+    assert type3 is None
+
+
+def test_onnx_detector_yolox_inference_mock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verify YOLOX multi-stride decoding, auto-detection, and NMS on mock session."""
+    import onnxruntime as ort
+    from geo_weed_station.core.onnx_detector import ModelType
+
+    dummy_onnx = tmp_path / "dummy_yolox.onnx"
+    dummy_onnx.touch()
+    classes_json = tmp_path / "dummy_yolox.json"
+    classes_json.write_text('{"0": "plant"}', encoding="utf-8")
+
+    # Stride 8: (1, 6, 80, 80), Stride 16: (1, 6, 40, 40), Stride 32: (1, 6, 20, 20)
+    out_stride8 = np.full((1, 6, 80, 80), -10.0, dtype=np.float32)
+    out_stride16 = np.full((1, 6, 40, 40), -10.0, dtype=np.float32)
+    out_stride32 = np.full((1, 6, 20, 20), -10.0, dtype=np.float32)
+
+    # Place one detection in stride 8 at center (y=40, x=40)
+    # Target in letterbox: grid_x=40 * 8 = 320, grid_y=40 * 8 = 320
+    # exp(0) * 8 = 8 -> w=8, h=8
+    out_stride8[0, 0, 40, 40] = 0.0   # reg dx
+    out_stride8[0, 1, 40, 40] = 0.0   # reg dy
+    out_stride8[0, 2, 40, 40] = 0.0   # reg dw -> exp(0) * 8 = 8
+    out_stride8[0, 3, 40, 40] = 0.0   # reg dh -> exp(0) * 8 = 8
+    out_stride8[0, 4, 40, 40] = 5.0   # obj_logits -> sigmoid(5.0) ~ 0.993
+    out_stride8[0, 5, 40, 40] = 5.0   # cls_logits -> sigmoid(5.0) ~ 0.993
+
+    class DummyInputOutput:
+        def __init__(self, name: str, shape: list[int]):
+            self.name = name
+            self.shape = shape
+
+    class MockYoloxSession:
+        def __init__(self, *args, **kwargs):
+            self._inputs = [DummyInputOutput("images", [1, 3, 640, 640])]
+            self._outputs = [
+                DummyInputOutput("out_stride8", [1, 6, 80, 80]),
+                DummyInputOutput("out_stride16", [1, 6, 40, 40]),
+                DummyInputOutput("out_stride32", [1, 6, 20, 20]),
+            ]
+
+        def get_inputs(self):
+            return self._inputs
+
+        def get_outputs(self):
+            return self._outputs
+
+        def get_modelmeta(self):
+            class Meta:
+                custom_metadata_map = {}
+            return Meta()
+
+        def run(self, output_names, input_feed):
+            assert "images" in input_feed
+            return [out_stride8, out_stride16, out_stride32]
+
+    monkeypatch.setattr(ort, "InferenceSession", MockYoloxSession)
+
+    settings = DetectorSettings(
+        model_path=dummy_onnx,
+        classes_path=classes_json,
+        confidence_threshold=0.25,
+        nms_iou_threshold=0.45,
+        input_size=(640, 640),
+    )
+
+    detector = OnnxDetector(settings)
+    detector.load()
+
+    # Verify auto-detection picked YOLOX
+    assert detector.model_type == ModelType.YOLOX.value
+
+    # Run detect on 640x640 image
+    test_img = np.zeros((640, 640, 3), dtype=np.uint8)
+    dets = detector.detect(test_img)
+
+    assert len(dets) == 1
+    d = dets[0]
+    assert d.class_name == "plant"
+    assert d.class_id == 0
+    assert d.confidence > 0.95
+    # Center was at 320, 320 -> normalized 0.5, 0.5
+    assert pytest.approx(d.bbox.x + d.bbox.w / 2.0, abs=0.02) == 0.5
+    assert pytest.approx(d.bbox.y + d.bbox.h / 2.0, abs=0.02) == 0.5
+
+
+def test_nms_class_aware_and_boxes_helpers():
+    """Verify class-aware NMS preserves overlapping boxes of different classes."""
+    from geo_weed_station.core.onnx_detector import nms, nms_boxes, nms_detected_weeds
+    from geo_weed_station.schemas.entities import BBox, DetectedWeed
+
+    # Two heavily overlapping boxes
+    boxes = np.array([
+        [10.0, 10.0, 50.0, 50.0],
+        [12.0, 12.0, 48.0, 48.0],
+    ], dtype=np.float32)
+    scores = np.array([0.9, 0.85], dtype=np.float32)
+
+    # 1. Class-agnostic (same class or class_ids=None): only highest score retained
+    assert nms(boxes, scores, iou_thr=0.45) == [0]
+    assert nms(boxes, scores, iou_thr=0.45, class_ids=np.array([0, 0])) == [0]
+
+    # 2. Class-aware (different classes): both must be kept
+    assert nms(boxes, scores, iou_thr=0.45, class_ids=np.array([0, 1])) == [0, 1]
+
+    # 3. Test nms_boxes with xywh format
+    boxes_xywh = [[10.0, 10.0, 40.0, 40.0], [12.0, 12.0, 36.0, 36.0]]
+    assert nms_boxes(boxes_xywh, scores, iou_thr=0.45, box_format="xywh") == [0]
+    assert nms_boxes(boxes_xywh, scores, iou_thr=0.45, class_ids=[0, 1], box_format="xywh") == [0, 1]
+
+    # 4. Test nms_detected_weeds on entities
+    w1 = DetectedWeed(
+        weed_id="w1", class_id=0, class_name="dicot", confidence=0.95,
+        bbox=BBox(x=0.1, y=0.1, w=0.2, h=0.2)
+    )
+    w2_same_cls = DetectedWeed(
+        weed_id="w2", class_id=0, class_name="dicot", confidence=0.80,
+        bbox=BBox(x=0.11, y=0.11, w=0.19, h=0.19)
+    )
+    w3_diff_cls = DetectedWeed(
+        weed_id="w3", class_id=1, class_name="monocot", confidence=0.88,
+        bbox=BBox(x=0.11, y=0.11, w=0.19, h=0.19)
+    )
+
+    # Suppress duplicate of same class
+    filtered_same = nms_detected_weeds([w1, w2_same_cls], iou_thr=0.45)
+    assert len(filtered_same) == 1
+    assert filtered_same[0].weed_id == "w1"
+
+    # Keep both when classes differ
+    filtered_diff = nms_detected_weeds([w1, w3_diff_cls], iou_thr=0.45, class_aware=True)
+    assert len(filtered_diff) == 2
+
+

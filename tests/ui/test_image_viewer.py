@@ -164,6 +164,10 @@ def test_detection_filter_panel_signals(qtbot):
     assert len(emitted_states) >= 1
     assert emitted_states[-1].min_confidence == 0.50
 
+    # Change NMS IoU threshold
+    panel._slider_iou.setValue(60)
+    assert emitted_states[-1].nms_iou_threshold == 0.60
+
     # Toggle boxes checkbox
     panel._cb_boxes.setChecked(False)
     assert emitted_states[-1].show_boxes is False

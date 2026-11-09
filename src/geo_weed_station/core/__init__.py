@@ -26,10 +26,16 @@ from geo_weed_station.core.mission_planner import (
 )
 from geo_weed_station.core.onnx_detector import (
     LetterboxResult,
+    ModelMetadata,
+    ModelType,
     OnnxDetector,
     letterbox,
     load_class_names,
+    load_model_classes_and_type,
+    load_model_metadata,
     nms,
+    nms_boxes,
+    nms_detected_weeds,
 )
 from geo_weed_station.core.xmp_parser import (
     XmpSpatialData,
@@ -63,10 +69,16 @@ __all__ = [
     # detector
     "BaseDetector",
     "LetterboxResult",
+    "ModelMetadata",
+    "ModelType",
     "OnnxDetector",
     "letterbox",
     "nms",
+    "nms_boxes",
+    "nms_detected_weeds",
     "load_class_names",
+    "load_model_classes_and_type",
+    "load_model_metadata",
     # mission_planner
     "PlannerParams",
     "compute_footprint_m",

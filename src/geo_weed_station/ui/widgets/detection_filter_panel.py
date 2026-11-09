@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -32,6 +33,7 @@ class DetectionFilterState(BaseModel):
     show_labels: bool = True
     show_confidence: bool = True
     min_confidence: float = Field(default=0.25, ge=0.0, le=1.0)
+    nms_iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0)
     hidden_classes: frozenset[str] = frozenset()
 
 
@@ -96,12 +98,17 @@ class DetectionFilterPanel(QWidget):
 
         main_layout.addWidget(vis_group)
 
-        # 2. Confidence threshold group
-        conf_group = QGroupBox("Порог уверенности", self)
-        conf_layout = QVBoxLayout(conf_group)
-        conf_layout.setContentsMargins(6, 6, 6, 6)
+        # 2. Confidence and NMS threshold group
+        thresh_group = QGroupBox("Пороги детекции", self)
+        thresh_layout = QVBoxLayout(thresh_group)
+        thresh_layout.setContentsMargins(6, 6, 6, 6)
+        thresh_layout.setSpacing(4)
 
-        row_layout = QHBoxLayout()
+        # 2.1 Confidence row
+        lbl_conf = QLabel("Уверенность (Confidence):", self)
+        thresh_layout.addWidget(lbl_conf)
+
+        row_conf = QHBoxLayout()
         self._slider_conf = QSlider(Qt.Orientation.Horizontal, self)
         self._slider_conf.setRange(0, 100)
         self._slider_conf.setValue(25)
@@ -115,11 +122,33 @@ class DetectionFilterPanel(QWidget):
         self._slider_conf.valueChanged.connect(self._on_slider_changed)
         self._spin_conf.valueChanged.connect(self._on_spin_changed)
 
-        row_layout.addWidget(self._slider_conf)
-        row_layout.addWidget(self._spin_conf)
-        conf_layout.addLayout(row_layout)
+        row_conf.addWidget(self._slider_conf, stretch=1)
+        row_conf.addWidget(self._spin_conf)
+        thresh_layout.addLayout(row_conf)
 
-        main_layout.addWidget(conf_group)
+        # 2.2 NMS IoU threshold row
+        lbl_iou = QLabel("Подавление наложений (NMS IoU):", self)
+        thresh_layout.addWidget(lbl_iou)
+
+        row_iou = QHBoxLayout()
+        self._slider_iou = QSlider(Qt.Orientation.Horizontal, self)
+        self._slider_iou.setRange(0, 100)
+        self._slider_iou.setValue(45)
+
+        self._spin_iou = QDoubleSpinBox(self)
+        self._spin_iou.setRange(0.0, 1.0)
+        self._spin_iou.setSingleStep(0.05)
+        self._spin_iou.setValue(0.45)
+        self._spin_iou.setDecimals(2)
+
+        self._slider_iou.valueChanged.connect(self._on_slider_iou_changed)
+        self._spin_iou.valueChanged.connect(self._on_spin_iou_changed)
+
+        row_iou.addWidget(self._slider_iou, stretch=1)
+        row_iou.addWidget(self._spin_iou)
+        thresh_layout.addLayout(row_iou)
+
+        main_layout.addWidget(thresh_group)
 
         # 3. Classes checklist group
         self._classes_group = QGroupBox("Классы сорняков", self)
@@ -164,11 +193,25 @@ class DetectionFilterPanel(QWidget):
         return Path(data) if data else None
 
     def load_classes_from_file(self, classes_path: Path) -> None:
-        """Load and display classes from JSON file."""
-        from geo_weed_station.core.onnx_detector import load_class_names
+        """Load and display classes from JSON file, updating default thresholds if provided."""
+        from geo_weed_station.core.onnx_detector import load_model_metadata
 
-        classes_dict = load_class_names(classes_path)
-        self.set_classes(list(classes_dict.values()))
+        meta = load_model_metadata(classes_path)
+        self.set_classes(list(meta.classes.values()))
+
+        # Update thresholds if specified in model metadata
+        if meta.confidence_threshold is not None or meta.nms_iou_threshold is not None:
+            self._block_signals = True
+            if meta.confidence_threshold is not None:
+                conf = max(0.0, min(1.0, float(meta.confidence_threshold)))
+                self._spin_conf.setValue(conf)
+                self._slider_conf.setValue(int(round(conf * 100)))
+            if meta.nms_iou_threshold is not None:
+                iou = max(0.0, min(1.0, float(meta.nms_iou_threshold)))
+                self._spin_iou.setValue(iou)
+                self._slider_iou.setValue(int(round(iou * 100)))
+            self._block_signals = False
+            self._emit_filter_changed()
 
     def set_classes(self, names: Sequence[str]) -> None:
         """Populate the list of classes, preserving unchecked state for known names."""
@@ -193,6 +236,7 @@ class DetectionFilterPanel(QWidget):
             show_labels=self._cb_labels.isChecked(),
             show_confidence=self._cb_confidence.isChecked(),
             min_confidence=float(self._spin_conf.value()),
+            nms_iou_threshold=float(self._spin_iou.value()),
             hidden_classes=frozenset(self._hidden_classes),
         )
 
@@ -202,9 +246,14 @@ class DetectionFilterPanel(QWidget):
         self._cb_boxes.setChecked(state.show_boxes)
         self._cb_labels.setChecked(state.show_labels)
         self._cb_confidence.setChecked(state.show_confidence)
+
         conf = max(0.0, min(1.0, float(state.min_confidence)))
         self._spin_conf.setValue(conf)
         self._slider_conf.setValue(int(round(conf * 100)))
+
+        iou = max(0.0, min(1.0, float(state.nms_iou_threshold)))
+        self._spin_iou.setValue(iou)
+        self._slider_iou.setValue(int(round(iou * 100)))
 
         self._hidden_classes = set(state.hidden_classes)
         for i in range(self._list_classes.count()):
@@ -233,6 +282,22 @@ class DetectionFilterPanel(QWidget):
             return
         self._block_signals = True
         self._slider_conf.setValue(int(round(value * 100)))
+        self._block_signals = False
+        self._emit_filter_changed()
+
+    def _on_slider_iou_changed(self, value: int) -> None:
+        if self._block_signals:
+            return
+        self._block_signals = True
+        self._spin_iou.setValue(value / 100.0)
+        self._block_signals = False
+        self._emit_filter_changed()
+
+    def _on_spin_iou_changed(self, value: float) -> None:
+        if self._block_signals:
+            return
+        self._block_signals = True
+        self._slider_iou.setValue(int(round(value * 100)))
         self._block_signals = False
         self._emit_filter_changed()
 

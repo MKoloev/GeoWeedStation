@@ -388,9 +388,21 @@ class OfflineController(QObject):
 
     @Slot(DetectionFilterState)
     def on_filter_changed(self, state: DetectionFilterState) -> None:
-        """Propagate detection display filter state to active viewers."""
+        """Propagate detection display filter state to active viewers and update detector settings."""
         self.image_viewer.apply_filter(state)
         self.video_player.apply_filter(state)
+
+        updated_det = self._settings.detector.model_copy(
+            update={
+                "confidence_threshold": state.min_confidence,
+                "nms_iou_threshold": state.nms_iou_threshold,
+            }
+        )
+        self._settings = self._settings.model_copy(update={"detector": updated_det})
+        if not self._has_custom_detector_factory:
+            self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+            if self._video_worker is not None:
+                self._video_worker.set_detector_factory(self._detector_factory)
 
     # -------------------------------------------------------------------------
     # Internal Handlers
