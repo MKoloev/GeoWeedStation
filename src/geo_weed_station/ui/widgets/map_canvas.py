@@ -320,8 +320,8 @@ class MapCanvas(QGraphicsView):
 
         # Ensure correct z-stacking
         self._mosaic_group.setZValue(5)
-        self._grid_lines_group.setZValue(8)
         self._heatmap_group.setZValue(10)
+        self._grid_lines_group.setZValue(12)
         self._prescription_group.setZValue(15)
         self._route_group.setZValue(20)
         self._points_group.setZValue(30)
@@ -539,11 +539,32 @@ class MapCanvas(QGraphicsView):
         self._heatmap_item.setTransform(self._heatmap_item.transform().scale(sx, sy))
         self._heatmap_group.addToGroup(self._heatmap_item)
 
-        # Draw survey bounding rectangle in grid layer
+        # Draw full coordinate/cell grid in grid layer
         bw = cols * sx
         bh = rows * sy
+
+        grid_path = QPainterPath()
+        # Vertical cell boundary lines
+        for c in range(cols + 1):
+            gx = origin_x + c * sx
+            grid_path.moveTo(gx, top_scene_y)
+            grid_path.lineTo(gx, top_scene_y + bh)
+
+        # Horizontal cell boundary lines
+        for r in range(rows + 1):
+            gy = top_scene_y + r * sy
+            grid_path.moveTo(origin_x, gy)
+            grid_path.lineTo(origin_x + bw, gy)
+
+        grid_item = QGraphicsPathItem(grid_path)
+        grid_pen = QPen(QColor(180, 200, 220, 110), 1.0, Qt.PenStyle.SolidLine)
+        grid_pen.setCosmetic(True)  # Keeps constant thin 1px size regardless of zoom
+        grid_item.setPen(grid_pen)
+        self._grid_lines_group.addToGroup(grid_item)
+
+        # Outer survey boundary accent
         border_rect = QGraphicsRectItem(origin_x, top_scene_y, bw, bh)
-        b_pen = QPen(QColor(80, 160, 240, 120), 1.0, Qt.PenStyle.DashLine)
+        b_pen = QPen(QColor(80, 160, 240, 180), 1.0, Qt.PenStyle.DashLine)
         b_pen.setCosmetic(True)
         border_rect.setPen(b_pen)
         self._grid_lines_group.addToGroup(border_rect)

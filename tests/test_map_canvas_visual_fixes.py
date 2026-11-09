@@ -8,8 +8,10 @@ from PySide6.QtCore import QPointF
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
+    QGraphicsPathItem,
     QGraphicsPixmapItem,
     QGraphicsPolygonItem,
+    QGraphicsRectItem,
 )
 
 from geo_weed_station.controllers.app_controller import AppController
@@ -210,5 +212,38 @@ def test_heatmap_cell_encloses_weed_point_with_zero_shift():
         assert cell_scene_y <= pt_scene_y <= (cell_scene_y + cell_m + 1e-5), (
             f"Point Y {pt_scene_y} is outside cell [{cell_scene_y} .. {cell_scene_y + cell_m}]!"
         )
+
+
+def test_heatmap_grid_lines_full_rendering_and_cosmetic(qtbot):
+    canvas = MapCanvas()
+    qtbot.addWidget(canvas)
+
+    import numpy as np
+    from geo_weed_station.schemas.map_models import Bounds, HeatmapGrid
+
+    matrix = np.ones((4, 5), dtype=np.float32)
+    grid = HeatmapGrid(
+        origin=(0.0, 0.0),
+        cell_size_m=0.5,
+        bounds=Bounds(min_x=0.0, min_y=0.0, max_x=2.5, max_y=2.0),
+        matrix=matrix,
+    )
+    canvas.set_heatmap(grid)
+
+    assert canvas._grid_lines_group is not None
+    assert canvas._grid_lines_group.zValue() > canvas._heatmap_group.zValue()
+
+    child_items = canvas._grid_lines_group.childItems()
+    path_items = [it for it in child_items if isinstance(it, QGraphicsPathItem)]
+    rect_items = [it for it in child_items if isinstance(it, QGraphicsRectItem)]
+
+    assert len(path_items) == 1
+    assert len(rect_items) == 1
+
+    grid_path_item = path_items[0]
+    pen = grid_path_item.pen()
+    assert pen.isCosmetic()
+    assert not grid_path_item.path().isEmpty()
+
 
 
