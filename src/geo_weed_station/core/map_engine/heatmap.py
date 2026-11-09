@@ -43,25 +43,37 @@ class CountHeatmap(HeatmapAlgorithm):
         cell_m: float,
         bounds: Bounds,
     ) -> HeatmapGrid:
-        cols = max(1, int(math.ceil(bounds.width / cell_m)))
-        rows = max(1, int(math.ceil(bounds.height / cell_m)))
+        origin_x = math.floor(bounds.min_x / cell_m) * cell_m
+        origin_y = math.floor(bounds.min_y / cell_m) * cell_m
+        end_x = math.ceil(bounds.max_x / cell_m) * cell_m
+        end_y = math.ceil(bounds.max_y / cell_m) * cell_m
+
+        cols = max(1, round((end_x - origin_x) / cell_m))
+        rows = max(1, round((end_y - origin_y) / cell_m))
 
         matrix = np.zeros((rows, cols), dtype=np.float32)
 
         for pt in points:
             # Determine cell column and row
-            col = int((pt.x - bounds.min_x) / cell_m)
-            row = int((pt.y - bounds.min_y) / cell_m)
+            col = math.floor((pt.x - origin_x) / cell_m)
+            row = math.floor((pt.y - origin_y) / cell_m)
 
             # Clamp index within valid array bounds
             col = min(cols - 1, max(0, col))
             row = min(rows - 1, max(0, row))
             matrix[row, col] += 1.0
 
+        grid_bounds = Bounds(
+            min_x=origin_x,
+            min_y=origin_y,
+            max_x=end_x,
+            max_y=end_y,
+        )
+
         return HeatmapGrid(
-            origin=(bounds.min_x, bounds.min_y),
+            origin=(origin_x, origin_y),
             cell_size_m=cell_m,
-            bounds=bounds,
+            bounds=grid_bounds,
             matrix=matrix,
         )
 

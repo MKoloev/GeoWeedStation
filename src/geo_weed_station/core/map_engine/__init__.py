@@ -1,6 +1,7 @@
 """Digital mapping engine: coordinate conversions, spatial projections, heatmap, and exporters."""
 
 from geo_weed_station.core.map_engine.coordinates import CoordinateConverter
+from geo_weed_station.core.map_engine.deduplication import deduplicate_weeds
 from geo_weed_station.core.map_engine.errors import (
     GeoreferenceMissingError,
     OriginNotSetError,
@@ -11,6 +12,11 @@ from geo_weed_station.core.map_engine.heatmap import (
     HeatmapAlgorithm,
     KdeHeatmap,
 )
+from geo_weed_station.core.map_engine.mosaic import (
+    compute_frame_footprint,
+    make_thumbnail,
+)
+from geo_weed_station.core.map_engine.prescription import generate_prescription_zones
 from geo_weed_station.core.map_engine.projector import (
     DistortionModel,
     NadirProjector,
@@ -31,6 +37,13 @@ __all__ = [
     "OriginNotSetError",
     # coordinates
     "CoordinateConverter",
+    # deduplication
+    "deduplicate_weeds",
+    # mosaic
+    "compute_frame_footprint",
+    "make_thumbnail",
+    # prescription
+    "generate_prescription_zones",
     # projector
     "DistortionModel",
     "ProjectionStrategy",

@@ -11,7 +11,13 @@ from PIL import Image, ImageDraw
 
 from geo_weed_station.core.map_engine.weed_map import WeedMap
 from geo_weed_station.schemas.entities import CoordinateSystem
-from geo_weed_station.schemas.map_models import HeatmapGrid, PngExportOptions
+from geo_weed_station.schemas.map_models import (
+    HeatmapGrid,
+    PngExportOptions,
+    PrescriptionZone,
+    SummaryReport,
+    WeedPoint,
+)
 
 # Class colors for vector markers on map (RGB)
 _CLASS_COLORS: dict[str, tuple[int, int, int]] = {
@@ -66,19 +72,71 @@ class MapExporter:
                     ]
                 )
 
-    def to_geojson(self, wm: WeedMap | Sequence[WeedPoint], path: Path) -> None:
-        """Export weed detections as a valid RFC 7946 GeoJSON FeatureCollection."""
+    def to_geojson(
+        self,
+        wm: WeedMap | Sequence[WeedPoint],
+        path: Path,
+        include_zones: bool = True,
+    ) -> None:
+        """Export weed detections and prescription zones as a valid RFC 7946 GeoJSON FeatureCollection."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         pts = wm.points if isinstance(wm, WeedMap) else wm
         cs = wm.coord_system if isinstance(wm, WeedMap) else (pts[0].coord_system if pts else CoordinateSystem.LOCAL_ARUCO)
 
         features = []
+
+        # 1. Export Prescription Zones if available and requested
+        if include_zones and isinstance(wm, WeedMap) and hasattr(wm, "prescription_zones") and wm.prescription_zones:
+            for zone in wm.prescription_zones:
+                if cs == CoordinateSystem.WGS84 and zone.wgs84_polygon:
+                    poly_coords = zone.wgs84_polygon
+                else:
+                    poly_coords = zone.polygon
+
+                ring = [
+                    [round(c[0], 8 if cs == CoordinateSystem.WGS84 else 6), round(c[1], 8 if cs == CoordinateSystem.WGS84 else 6)]
+                    for c in poly_coords
+                ]
+                if ring and ring[0] != ring[-1]:
+                    ring.append(ring[0])
+
+                feat = {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [ring],
+                    },
+                    "properties": {
+                        "feature_type": "prescription_zone",
+                        "zone_id": zone.zone_id,
+                        "area_m2": round(zone.area_m2, 2),
+                        "mean_density_per_m2": round(zone.mean_density_per_m2, 2),
+                        "weed_count": zone.weed_count,
+                        "dominant_class": zone.dominant_class,
+                        "treatment_recommendation": zone.treatment_recommendation,
+                    },
+                }
+                features.append(feat)
+
+        # 2. Export Weed Points
         for pt in pts:
             if pt.coord_system == CoordinateSystem.WGS84 and pt.lon is not None and pt.lat is not None:
                 coords = [round(pt.lon, 8), round(pt.lat, 8)]
             else:
                 coords = [round(pt.x, 6), round(pt.y, 6)]
+
+            props = {
+                "weed_id": pt.weed_id,
+                "class_name": pt.class_name,
+                "confidence": round(pt.confidence, 4),
+                "coord_system": pt.coord_system.value,
+                "source_frame": pt.source_frame,
+            }
+            if pt.best_frame_id is not None:
+                props["best_frame_id"] = pt.best_frame_id
+            if pt.duplicate_count > 1:
+                props["duplicate_count"] = pt.duplicate_count
 
             feat = {
                 "type": "Feature",
@@ -86,13 +144,7 @@ class MapExporter:
                     "type": "Point",
                     "coordinates": coords,
                 },
-                "properties": {
-                    "weed_id": pt.weed_id,
-                    "class_name": pt.class_name,
-                    "confidence": round(pt.confidence, 4),
-                    "coord_system": pt.coord_system.value,
-                    "source_frame": pt.source_frame,
-                },
+                "properties": props,
             }
             features.append(feat)
 
@@ -113,6 +165,54 @@ class MapExporter:
 
     export_csv = to_csv
     export_geojson = to_geojson
+
+    def to_summary_json(self, report: SummaryReport, path: Path) -> None:
+        """Export agronomic summary report and prescription zones to structured JSON."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(report.model_dump_json(indent=2))
+
+    def to_summary_csv(self, report: SummaryReport, path: Path) -> None:
+        """Export agronomic summary metrics and prescription zones table to CSV."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["metric", "value"])
+            writer.writerow(["total_detections", report.total_detections])
+            writer.writerow(["unique_weeds", report.unique_weeds])
+            writer.writerow(["deduplication_ratio", report.deduplication_ratio])
+            writer.writerow(["surveyed_area_m2", report.surveyed_area_m2])
+            writer.writerow(["mean_density_per_m2", report.mean_density_per_m2])
+            writer.writerow(["critical_area_percent", report.critical_area_percent])
+            writer.writerow(["prescription_zones_count", report.prescription_zones_count])
+            writer.writerow(["frames_count", report.frames_count])
+            writer.writerow([])
+            writer.writerow(
+                [
+                    "zone_id",
+                    "area_m2",
+                    "mean_density_per_m2",
+                    "weed_count",
+                    "dominant_class",
+                    "treatment_recommendation",
+                ]
+            )
+            for z in report.zones:
+                writer.writerow(
+                    [
+                        z.zone_id,
+                        z.area_m2,
+                        z.mean_density_per_m2,
+                        z.weed_count,
+                        z.dominant_class,
+                        z.treatment_recommendation,
+                    ]
+                )
+
+    export_summary_json = to_summary_json
+    export_summary_csv = to_summary_csv
 
     def export_png(
         self,

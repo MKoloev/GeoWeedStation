@@ -24,10 +24,10 @@ from geo_weed_station.core.source_factory import (
     VIDEO_EXTENSIONS,
     FolderSource,
     ImageSource,
-    load_image_payload,
 )
 from geo_weed_station.core.xmp_parser import has_xmp
 from geo_weed_station.schemas.entities import DetectedWeed
+from geo_weed_station.schemas.mission import Waypoint
 from geo_weed_station.schemas.payload import FramePayload
 from geo_weed_station.schemas.session import FileEntry
 from geo_weed_station.ui.app_mode import AppMode
@@ -44,7 +44,7 @@ from geo_weed_station.ui.widgets.detection_filter_panel import (
 )
 from geo_weed_station.ui.widgets.file_list_panel import FileListPanel
 from geo_weed_station.ui.widgets.image_viewer import ImageViewer
-from geo_weed_station.ui.widgets.map_canvas import MapCanvas
+from geo_weed_station.ui.widgets.map_canvas import LayerControlPanel, MapCanvas
 from geo_weed_station.ui.widgets.map_info_panel import MapInfoPanel
 from geo_weed_station.ui.widgets.video_player_widget import VideoPlayerWidget
 from geo_weed_station.workers.base_worker import start_in_thread
@@ -78,6 +78,8 @@ class OfflineController(QObject):
         self.image_viewer = ImageViewer()
         self.video_player = VideoPlayerWidget()
         self.map_canvas = MapCanvas()
+        self.layer_control_panel = LayerControlPanel()
+        self.layer_control_panel.connect_canvas(self.map_canvas)
         self.map_info_panel = MapInfoPanel()
         self.file_list_panel = FileListPanel()
         self.filter_panel = DetectionFilterPanel()
@@ -140,6 +142,7 @@ class OfflineController(QObject):
         # Install side panels for offline mode
         self._window.clear_default_panels(AppMode.OFFLINE)
         self._window.add_mode_panel(AppMode.OFFLINE, self.file_list_panel, "Пакетные файлы")
+        self._window.add_mode_panel(AppMode.OFFLINE, self.layer_control_panel, "Слои карты")
         self._window.add_mode_panel(AppMode.OFFLINE, self.filter_panel, "Фильтры детекций")
         self._window.add_mode_panel(AppMode.OFFLINE, self.map_info_panel, "Статистика карты")
 
@@ -164,6 +167,8 @@ class OfflineController(QObject):
         self._map_ctrl.statistics_changed.connect(self.map_info_panel.set_statistics)
         self._map_ctrl.map_locked_changed.connect(self._on_map_locked_changed)
         self.map_canvas.weed_selected.connect(self._on_weed_selected)
+        self.map_canvas.zone_selected.connect(self._on_zone_selected)
+        self.map_canvas.frame_selected.connect(self._on_frame_selected)
 
     def _on_model_changed(self, model_path: Path) -> None:
         """Handle model switch: resolve classes, reconfigure factory and update UI filter checkboxes."""
@@ -414,6 +419,9 @@ class OfflineController(QObject):
         self.image_viewer.clear()
         self._map_ctrl.reset()
         self.map_info_panel.clear_selection()
+        self.map_canvas.clear_route()
+        self.map_canvas.set_mosaic_footprints([])
+        self.map_canvas.set_prescription_zones([])
 
     def _on_batch_progress(self, index: int, total: int, status_text: str) -> None:
         pct = int(round((index / float(max(1, total))) * 100))
@@ -451,8 +459,17 @@ class OfflineController(QObject):
                 if combined != self.filter_panel._class_names:
                     self.filter_panel.set_classes(combined)
 
-        # Ingest into map engine
-        self._map_ctrl.on_frame(payload)
+        # Stream-ingest into map engine during batch without blocking GUI thread
+        if payload.has_georef():
+            try:
+                new_pts = self._map_ctrl.engine.ingest_frame(payload)
+                self.map_canvas.append_points(new_pts)
+                self._map_ctrl.statistics_changed.emit(self._map_ctrl.engine.statistics())
+                self._map_ctrl.map_locked_changed.emit(False, "")
+            except Exception as exc:
+                logger.warning("Frame spatial ingestion error: %s", exc)
+        else:
+            self._map_ctrl.map_locked_changed.emit(True, MAP_LOCKED_TEXT)
 
     def _on_batch_finished(self, succeeded: int, failed: int) -> None:
         try:
@@ -466,18 +483,77 @@ class OfflineController(QObject):
         )
         self._batch_worker = None
 
+        # Build final aggregated layers: deduplicated points, KDE heatmap, prescription zones, mosaic, route
+        self._on_map_updated()
+
+        zones = self._map_ctrl.engine.build_prescription_zones()
+        self.map_canvas.set_prescription_zones(zones)
+        footprints = self._map_ctrl.engine.weed_map.footprints
+        if footprints:
+            wps = [
+                Waypoint(x=fp.center_x, y=fp.center_y, z=fp.altitude_m, yaw=fp.yaw_deg)
+                for fp in footprints
+            ]
+            self.map_canvas.set_route(wps)
+
     def _on_map_updated(self) -> None:
         points = self._map_ctrl.engine.weed_map.points
-        self.map_canvas.set_points(points)
+        dedup = self._map_ctrl.engine.weed_map.deduplicated_points()
+        self.map_canvas.set_points(dedup if dedup else points)
         grid = self._map_ctrl.engine.build_heatmap()
         self.map_canvas.set_heatmap(grid)
+        self.map_canvas.set_mosaic_footprints(self._map_ctrl.engine.weed_map.footprints)
 
     def _on_map_locked_changed(self, locked: bool, reason: str) -> None:
         self.map_canvas.set_locked(locked, reason or MAP_LOCKED_TEXT)
         self._window.set_map_tab_locked(locked, reason or MAP_LOCKED_TEXT)
 
     def _on_weed_selected(self, weed_id: str) -> None:
-        for p in self._map_ctrl.engine.weed_map.points:
-            if p.weed_id == weed_id:
-                self.map_info_panel.show_point(p, None)
+        target_pt = self.map_canvas.selected_weed_point()
+        if target_pt is None or target_pt.weed_id != weed_id:
+            for p in self._map_ctrl.engine.weed_map.points:
+                if p.weed_id == weed_id:
+                    target_pt = p
+                    break
+
+        if target_pt is None:
+            return
+
+        self.map_info_panel.show_point(target_pt, None)
+
+        frame_name = target_pt.best_frame_id or target_pt.source_frame
+        matching_entry = None
+        for entry in self.file_list_panel.model.entries:
+            p = Path(entry.path)
+            if p.name == frame_name or entry.path == frame_name or p.stem == frame_name:
+                matching_entry = entry
+                break
+
+        if matching_entry is not None:
+            self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
+            self._load_entry_to_viewer(matching_entry)
+            self.image_viewer.focus_on_weed(target_pt.weed_id, target_pt.bbox)
+            self._window.status_bar_panel.set_message(
+                f"Сорняк {target_pt.weed_id} ({target_pt.class_name}) выделен на снимке {Path(matching_entry.path).name}"
+            )
+
+    def _on_frame_selected(self, frame_id: str) -> None:
+        matching_entry = None
+        for entry in self.file_list_panel.model.entries:
+            p = Path(entry.path)
+            if p.name == frame_id or entry.path == frame_id or p.stem == frame_id:
+                matching_entry = entry
+                break
+
+        if matching_entry is not None:
+            self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
+            self._load_entry_to_viewer(matching_entry)
+            self._window.status_bar_panel.set_message(f"Кадр {Path(matching_entry.path).name} открыт в инспекторе")
+
+    def _on_zone_selected(self, zone_id: str) -> None:
+        for z in self._map_ctrl.engine.weed_map.prescription_zones:
+            if z.zone_id == zone_id:
+                self._window.status_bar_panel.set_message(
+                    f"Очаг {z.zone_id}: площадь {z.area_m2:.1f} м², сорняков {z.weed_count}, норма: {z.treatment_recommendation}"
+                )
                 break

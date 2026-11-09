@@ -9,9 +9,13 @@ from geo_weed_station.schemas.entities import (
 )
 from geo_weed_station.schemas.map_models import (
     Bounds,
+    FrameFootprint,
+    FrameMosaicItem,
     HeatmapGrid,
     MapStatistics,
     PngExportOptions,
+    PrescriptionZone,
+    SummaryReport,
     WeedPoint,
 )
 from geo_weed_station.schemas.mission import (
@@ -78,8 +82,12 @@ __all__ = [
     "summary_to_frame_payloads",
     # map_models
     "Bounds",
-    "WeedPoint",
+    "FrameFootprint",
+    "FrameMosaicItem",
     "HeatmapGrid",
     "MapStatistics",
     "PngExportOptions",
+    "PrescriptionZone",
+    "SummaryReport",
+    "WeedPoint",
 ]

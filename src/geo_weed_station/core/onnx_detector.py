@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -72,7 +72,7 @@ def letterbox(
     tensor = np.expand_dims(tensor, axis=0)  # (1, 3, H, W)
     tensor = np.ascontiguousarray(tensor)
 
-    return LetterboxResult(tensor=tensor, scale=scale, pad=(pad_x, pad_y))
+    return LetterboxResult(tensor=tensor, scale=scale, pad=(float(left), float(top)))
 
 
 def nms(boxes: np.ndarray, scores: np.ndarray, iou_thr: float) -> list[int]:

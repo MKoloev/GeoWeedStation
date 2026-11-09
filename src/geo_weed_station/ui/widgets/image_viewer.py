@@ -104,6 +104,25 @@ class DetectionGraphicsItem(QGraphicsRectItem):
         else:
             self.label_item.setVisible(False)
 
+    def set_highlighted(self, highlight: bool) -> None:
+        """Apply high-contrast highlight styling when selected or focused."""
+        if highlight:
+            pen = QPen(QColor(255, 235, 20), 3.5)
+            pen.setCosmetic(True)
+            self.setPen(pen)
+            brush_color = QColor(255, 235, 20)
+            brush_color.setAlpha(70)
+            self.setBrush(QBrush(brush_color))
+            self.setZValue(100)
+        else:
+            pen = QPen(self.color, 2.0)
+            pen.setCosmetic(True)
+            self.setPen(pen)
+            brush_color = QColor(self.color)
+            brush_color.setAlpha(30)
+            self.setBrush(QBrush(brush_color))
+            self.setZValue(1)
+
 
 class ImageViewer(QGraphicsView):
     """High-performance image viewer supporting smooth zoom, pan, and detection overlays."""
@@ -207,6 +226,23 @@ class ImageViewer(QGraphicsView):
             item.update_visibility(self._filter_state)
             self._scene.addItem(item)
             self._detection_items.append(item)
+
+    def focus_on_weed(self, weed_id: str, bbox: Any = None) -> None:
+        """Focus and highlight a weed detection box on the image."""
+        target_item: DetectionGraphicsItem | None = None
+        for item in self._detection_items:
+            if item.weed.weed_id == weed_id:
+                item.set_highlighted(True)
+                target_item = item
+            else:
+                item.set_highlighted(False)
+
+        if target_item is not None:
+            self.centerOn(target_item)
+            rect = target_item.sceneBoundingRect().adjusted(-60, -60, 60, 60)
+            self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+            self._current_zoom = self.transform().m11()
+            self.zoom_changed.emit(self._current_zoom)
 
     @Slot(DetectionFilterState)
     def apply_filter(self, state: DetectionFilterState) -> None:

@@ -6,12 +6,22 @@ from collections.abc import Iterable
 
 from geo_weed_station.config.settings import MapSettings
 from geo_weed_station.core.map_engine.coordinates import CoordinateConverter
+from geo_weed_station.core.map_engine.deduplication import deduplicate_weeds
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
 from geo_weed_station.core.map_engine.heatmap import CountHeatmap, HeatmapAlgorithm
+from geo_weed_station.core.map_engine.mosaic import compute_frame_footprint
+from geo_weed_station.core.map_engine.prescription import generate_prescription_zones
 from geo_weed_station.core.map_engine.projector import ProjectionStrategy, validate_georef
 from geo_weed_station.core.map_engine.statistics import calculate_statistics, convex_hull_area
 from geo_weed_station.schemas.entities import CoordinateSystem
-from geo_weed_station.schemas.map_models import Bounds, HeatmapGrid, MapStatistics, WeedPoint
+from geo_weed_station.schemas.map_models import (
+    Bounds,
+    FrameFootprint,
+    HeatmapGrid,
+    MapStatistics,
+    PrescriptionZone,
+    WeedPoint,
+)
 from geo_weed_station.schemas.onboard_api import SummaryDetections, summary_to_frame_payloads
 from geo_weed_station.schemas.payload import FramePayload
 
@@ -21,6 +31,8 @@ class WeedMap:
 
     def __init__(self, coord_system: CoordinateSystem = CoordinateSystem.LOCAL_ARUCO) -> None:
         self.points: list[WeedPoint] = []
+        self.footprints: list[FrameFootprint] = []
+        self.prescription_zones: list[PrescriptionZone] = []
         self.coord_system = coord_system
 
     def add_points(self, pts: Iterable[WeedPoint]) -> None:
@@ -29,13 +41,26 @@ class WeedMap:
             self.points.append(p)
             self.coord_system = p.coord_system
 
-    def bounds(self, margin_m: float = 1.0) -> Bounds:
-        """Calculate spatial bounding box of all points with optional margin."""
-        if not self.points:
-            return Bounds(min_x=0.0, min_y=0.0, max_x=1.0, max_y=1.0)
+    def add_footprint(self, fp: FrameFootprint) -> None:
+        """Add footprint polygon of an aerial frame."""
+        self.footprints.append(fp)
 
+    def deduplicated_points(self, radius_m: float = 0.35, match_classes: bool = True) -> list[WeedPoint]:
+        """Return spatially deduplicated weed points across overlapping frames."""
+        return deduplicate_weeds(self.points, radius_m=radius_m, match_classes=match_classes)
+
+    def bounds(self, margin_m: float = 1.0) -> Bounds:
+        """Calculate spatial bounding box of all points and footprints with optional margin."""
         xs = [p.x for p in self.points]
         ys = [p.y for p in self.points]
+        for fp in self.footprints:
+            for cx, cy in fp.polygon:
+                xs.append(cx)
+                ys.append(cy)
+
+        if not xs or not ys:
+            return Bounds(min_x=0.0, min_y=0.0, max_x=1.0, max_y=1.0)
+
         return Bounds(
             min_x=min(xs) - margin_m,
             min_y=min(ys) - margin_m,
@@ -48,8 +73,10 @@ class WeedMap:
         return convex_hull_area(self.points)
 
     def clear(self) -> None:
-        """Remove all points from the map."""
+        """Remove all points, footprints, and prescription zones from the map."""
         self.points.clear()
+        self.footprints.clear()
+        self.prescription_zones.clear()
 
 
 class MapEngine:
@@ -134,6 +161,8 @@ class MapEngine:
                     source_frame=payload.frame_id,
                     lat=round(weed_lat, 8),
                     lon=round(weed_lon, 8),
+                    bbox=det.bbox,
+                    best_frame_id=payload.frame_id,
                 )
             else:
                 wp = WeedPoint(
@@ -144,10 +173,21 @@ class MapEngine:
                     y=det.world_y,
                     coord_system=CoordinateSystem.LOCAL_ARUCO,
                     source_frame=payload.frame_id,
+                    bbox=det.bbox,
+                    best_frame_id=payload.frame_id,
                 )
             new_points.append(wp)
 
         self.weed_map.add_points(new_points)
+
+        # Compute footprint for quick-stitch mosaic
+        try:
+            fp = compute_frame_footprint(payload, converter=self._converter)
+            if fp is not None:
+                self.weed_map.add_footprint(fp)
+        except Exception:
+            pass
+
         return new_points
 
     def ingest_summary(self, summary: SummaryDetections) -> list[WeedPoint]:
@@ -209,6 +249,24 @@ class MapEngine:
             self.weed_map.points, cell_m=cell_size, bounds=bounds
         )
         return self._current_grid
+
+    def build_prescription_zones(
+        self, threshold: float | None = None, min_area_m2: float = 1.0
+    ) -> list[PrescriptionZone]:
+        """Generate contiguous vector prescription treatment zones from active density grid."""
+        crit_thresh = threshold if threshold is not None else self.settings.critical_density_threshold
+        if self._current_grid is None:
+            self.build_heatmap()
+
+        zones = generate_prescription_zones(
+            self._current_grid,
+            self.weed_map.points,
+            threshold=crit_thresh,
+            min_area_m2=min_area_m2,
+            converter=self._converter,
+        )
+        self.weed_map.prescription_zones = zones
+        return zones
 
     def statistics(self) -> MapStatistics:
         """Calculate aggregated field metrics and critical density percentage."""

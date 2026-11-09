@@ -80,7 +80,9 @@ class ExportController(QObject):
 
             if ExportFormat.GEOJSON in req.formats:
                 geojson_path = req.target_dir / f"{req.base_name}.geojson"
-                self._exporter.export_geojson(points, geojson_path)
+                self._exporter.export_geojson(
+                    self._map_ctrl.engine.weed_map, geojson_path, include_zones=True
+                )
 
             if ExportFormat.PNG in req.formats:
                 png_path = req.target_dir / f"{req.base_name}.png"
