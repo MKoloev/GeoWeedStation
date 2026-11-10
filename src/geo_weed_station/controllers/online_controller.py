@@ -256,6 +256,7 @@ class OnlineController(QObject):
         """Send SIGINT (Ctrl+C) to running remote mission and issue REST land fallback."""
         logger.warning("Emergency land triggered from MissionControl")
         self._window.status_bar_panel.set_message("Экстренная посадка: отправка SIGINT (Ctrl+C) на дрон...")
+        self.mission_control.live_stream_widget.stop_auto_snapshot()
 
         if self._ssh_worker is not None:
             self._ssh_worker.abort_mission()
@@ -266,6 +267,7 @@ class OnlineController(QObject):
     @Slot()
     def stop_ssh_mission(self) -> None:
         """Stop SSH mission worker if running."""
+        self.mission_control.live_stream_widget.stop_auto_snapshot()
         if self._ssh_worker is not None:
             self._ssh_worker.abort_mission()
             self._ssh_worker = None
@@ -275,6 +277,7 @@ class OnlineController(QObject):
         self._window.status_bar_panel.set_message("Миссия Skyris выполняется на дроне (SSH)...")
 
     def _on_ssh_mission_finished(self, success: bool, message: str) -> None:
+        self.mission_control.live_stream_widget.stop_auto_snapshot()
         self.mission_control.set_flight_locked(False)
         self._flight_start_time = None
         self._ssh_worker = None
@@ -282,6 +285,7 @@ class OnlineController(QObject):
         self._window.status_bar_panel.set_message(message)
 
     def _on_ssh_mission_failed(self, error: str) -> None:
+        self.mission_control.live_stream_widget.stop_auto_snapshot()
         self.mission_control.set_flight_locked(False)
         self._flight_start_time = None
         self._ssh_worker = None

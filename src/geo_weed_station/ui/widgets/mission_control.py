@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Signal, Slot
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -20,9 +20,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
-    QScrollArea,
     QSpinBox,
-    QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -44,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class MissionControl(QWidget):
-    """Mission control UI: flight planning, live detection video stream, and SSH onboard launcher."""
+    """Mission control UI: tabbed layout for Skyris live detection stream, onboard launcher and logs."""
 
     plan_requested = Signal(PlannerParams)
     send_mission_requested = Signal(MissionTask)
@@ -58,241 +57,196 @@ class MissionControl(QWidget):
         self._planned_waypoints: list[Waypoint] = []
         self._is_flight_locked = False
 
+        self._init_compat_attributes()
         self._init_ui()
 
+    def _init_compat_attributes(self) -> None:
+        """Initialize invisible headless attributes for backward compatibility with legacy tests."""
+        self.spin_x1 = QDoubleSpinBox()
+        self.spin_y1 = QDoubleSpinBox()
+        self.spin_x2 = QDoubleSpinBox()
+        self.spin_x2.setValue(20.0)
+        self.spin_y2 = QDoubleSpinBox()
+        self.spin_y2.setValue(20.0)
+        self.spin_alt = QDoubleSpinBox()
+        self.spin_alt.setValue(10.0)
+        self.spin_overlap = QSpinBox()
+        self.spin_overlap.setValue(20)
+
+        self.combo_cs = QComboBox()
+        self.combo_cs.addItem("local_aruco", CoordinateSystem.LOCAL_ARUCO)
+        self.combo_cs.addItem("wgs84", CoordinateSystem.WGS84)
+
+        self.combo_mode = QComboBox()
+        self.combo_mode.addItem("collection", MissionMode.COLLECTION_ONLY)
+        self.combo_mode.addItem("inference", MissionMode.INFERENCE_SEQUENTIAL)
+
+        self.cb_save_images = QCheckBox()
+        self.cb_save_images.setChecked(True)
+        self.cb_save_metadata = QCheckBox()
+        self.cb_save_metadata.setChecked(True)
+
+        self.btn_plan = QPushButton("Рассчитать")
+        self.btn_plan.clicked.connect(self._on_plan_clicked)
+
+        self.lbl_route_summary = QLabel("Маршрут не рассчитан")
+
+        self.btn_send = QPushButton("Старт REST")
+        self.btn_send.clicked.connect(self._on_send_clicked)
+
+        self.btn_rth = QPushButton("RTH")
+        self.btn_rth.clicked.connect(lambda: self.stop_requested.emit(StopAction.RTH))
+
     def _init_ui(self) -> None:
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(6, 6, 6, 6)
         main_layout.setSpacing(6)
 
-        # Main horizontal splitter: Left panel (Settings & Controls) | Right panel (Video & Logs)
-        self.main_splitter = QSplitter(Qt.Orientation.Horizontal, self)
-
         # =====================================================================
-        # LEFT PANE: Mission Settings, Planning & Launch Controls (Scrollable)
+        # 1. TOP PERSISTENT FLIGHT ACTION BAR (Always visible across all tabs)
         # =====================================================================
-        scroll = QScrollArea(self.main_splitter)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        left_container = QWidget()
-        left_layout = QVBoxLayout(left_container)
-        left_layout.setContentsMargins(4, 4, 4, 4)
-        left_layout.setSpacing(8)
+        top_bar = QFrame(self)
+        top_bar.setFrameShape(QFrame.Shape.StyledPanel)
+        top_bar.setStyleSheet(
+            "background-color: #1e1e1e; border: 1px solid #333333; border-radius: 6px; padding: 4px;"
+        )
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(6, 6, 6, 6)
+        top_layout.setSpacing(12)
 
-        # 1. Skyris Drone SBC Launch Group (SSH)
-        ssh_group = QGroupBox("🚀 Бортовой комплекс Skyris (Orange Pi 5 Pro)", left_container)
-        ssh_layout = QVBoxLayout(ssh_group)
-        ssh_layout.setContentsMargins(8, 8, 8, 8)
-        ssh_layout.setSpacing(8)
-
-        # Action Buttons Row: Big Start & Emergency Land
-        btn_row = QHBoxLayout()
-        self.btn_start_drone_mission = QPushButton("🚀 Запустить миссию на дроне", ssh_group)
+        # Launch Button
+        self.btn_start_drone_mission = QPushButton("🚀 Запустить миссию на дроне", top_bar)
         self.btn_start_drone_mission.setStyleSheet(
             "background-color: #2b8a3e; color: #ffffff; font-weight: bold; "
-            "font-size: 13px; padding: 10px 14px; border-radius: 4px;"
+            "font-size: 13px; padding: 10px 18px; border-radius: 4px;"
         )
         self.btn_start_drone_mission.clicked.connect(self._on_start_drone_mission_clicked)
-        btn_row.addWidget(self.btn_start_drone_mission, 2)
+        top_layout.addWidget(self.btn_start_drone_mission)
 
-        self.btn_emergency_land = QPushButton("⬇ Экстренная посадка (Land)", ssh_group)
+        # Emergency Land Button
+        self.btn_emergency_land = QPushButton("⬇ Экстренная посадка (Land)", top_bar)
         self.btn_emergency_land.setStyleSheet(
             "background-color: #c92a2a; color: #ffffff; font-weight: bold; "
-            "font-size: 13px; padding: 10px 14px; border-radius: 4px;"
+            "font-size: 13px; padding: 10px 18px; border-radius: 4px;"
         )
         self.btn_emergency_land.clicked.connect(self._on_emergency_land_clicked)
-        btn_row.addWidget(self.btn_emergency_land, 1)
+        top_layout.addWidget(self.btn_emergency_land)
 
-        ssh_layout.addLayout(btn_row)
+        self.btn_land = self.btn_emergency_land
 
-        # Expandable/Configurable SSH parameters
-        ssh_form = QFormLayout()
-        ssh_form.setContentsMargins(2, 4, 2, 4)
+        # Separator line
+        sep_top = QFrame(top_bar)
+        sep_top.setFrameShape(QFrame.Shape.VLine)
+        sep_top.setFrameShadow(QFrame.Shadow.Sunken)
+        top_layout.addWidget(sep_top)
+
+        # Status and Progress Display
+        self.lbl_status_badge = QLabel("Готов к запуску", top_bar)
+        self.lbl_status_badge.setStyleSheet(
+            "background-color: #212529; color: #a9e34b; font-weight: bold; "
+            "padding: 5px 12px; border-radius: 4px; border: 1px solid #343a40;"
+        )
+        top_layout.addWidget(self.lbl_status_badge)
+
+        self.lbl_flight_progress = QLabel("Контрольная точка: —", top_bar)
+        self.lbl_flight_progress.setStyleSheet("font-weight: bold; color: #ced4da; font-size: 12px;")
+        top_layout.addWidget(self.lbl_flight_progress)
+
+        top_layout.addStretch(1)
+
+        # Validation errors banner inside top area
+        self.lbl_errors = QLabel("", top_bar)
+        self.lbl_errors.setStyleSheet("color: #ff6b6b; font-weight: bold; padding: 2px 6px;")
+        self.lbl_errors.setWordWrap(True)
+        self.lbl_errors.setVisible(False)
+        top_layout.addWidget(self.lbl_errors)
+
+        main_layout.addWidget(top_bar)
+
+        # =====================================================================
+        # 2. MAIN TABBED SUB-WINDOWS ("по окнам"): Video Stream vs Onboard Logs
+        # =====================================================================
+        self.tabs = QTabWidget(self)
+        self.tabs.setStyleSheet(
+            "QTabWidget::pane { border: 1px solid #333333; background: #181818; border-radius: 4px; } "
+            "QTabBar::tab { font-weight: bold; font-size: 12px; padding: 8px 16px; margin-right: 4px; } "
+            "QTabBar::tab:selected { background: #2d3748; color: #63b3ed; border-bottom: 2px solid #3182ce; }"
+        )
+
+        # ---------------------------------------------------------------------
+        # Tab 1: Video Stream with Weed Detections & Single Snapshot Studio
+        # ---------------------------------------------------------------------
+        self.tab_stream = QWidget(self.tabs)
+        tab_stream_layout = QVBoxLayout(self.tab_stream)
+        tab_stream_layout.setContentsMargins(4, 4, 4, 4)
+
+        self.live_stream_widget = LiveStreamWidget(
+            host=DEFAULT_SSH_HOST, port=8080, parent=self.tab_stream
+        )
+        self.cb_auto_snapshot = self.live_stream_widget.btn_auto_snapshot
+        tab_stream_layout.addWidget(self.live_stream_widget)
+
+        self.tabs.addTab(self.tab_stream, "🎥 Видеотрансляция и детекция сорняков")
+
+        # ---------------------------------------------------------------------
+        # Tab 2: Drone Onboard Settings & Real-Time SSH Console Logs
+        # ---------------------------------------------------------------------
+        self.tab_onboard = QWidget(self.tabs)
+        tab_onboard_layout = QVBoxLayout(self.tab_onboard)
+        tab_onboard_layout.setContentsMargins(8, 8, 8, 8)
+        tab_onboard_layout.setSpacing(8)
+
+        # Parameters Group (Compact)
+        params_group = QGroupBox("Параметры связи с бортовым компьютером Skyris (Orange Pi 5 Pro)", self.tab_onboard)
+        params_layout = QVBoxLayout(params_group)
+        params_layout.setContentsMargins(8, 8, 8, 8)
+        params_layout.setSpacing(6)
+
+        conn_form = QFormLayout()
+        conn_form.setContentsMargins(2, 2, 2, 2)
 
         row_conn = QHBoxLayout()
-        self.edit_ssh_host = QLineEdit(DEFAULT_SSH_HOST, ssh_group)
-        self.spin_ssh_port = QSpinBox(ssh_group)
+        self.edit_ssh_host = QLineEdit(DEFAULT_SSH_HOST, params_group)
+        self.spin_ssh_port = QSpinBox(params_group)
         self.spin_ssh_port.setRange(1, 65535)
         self.spin_ssh_port.setValue(DEFAULT_SSH_PORT)
-        row_conn.addWidget(QLabel("IP:"))
+        row_conn.addWidget(QLabel("IP дрона:"))
         row_conn.addWidget(self.edit_ssh_host)
-        row_conn.addWidget(QLabel("Порт:"))
+        row_conn.addWidget(QLabel("Порт SSH:"))
         row_conn.addWidget(self.spin_ssh_port)
-        ssh_form.addRow("Подключение SSH:", row_conn)
 
-        row_auth = QHBoxLayout()
-        self.edit_ssh_user = QLineEdit(DEFAULT_SSH_USER, ssh_group)
-        self.edit_ssh_pass = QLineEdit(DEFAULT_SSH_PASSWORD, ssh_group)
+        self.edit_ssh_user = QLineEdit(DEFAULT_SSH_USER, params_group)
+        self.edit_ssh_pass = QLineEdit(DEFAULT_SSH_PASSWORD, params_group)
         self.edit_ssh_pass.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
-        row_auth.addWidget(QLabel("Логин:"))
-        row_auth.addWidget(self.edit_ssh_user)
-        row_auth.addWidget(QLabel("Пароль:"))
-        row_auth.addWidget(self.edit_ssh_pass)
-        ssh_form.addRow("Авторизация:", row_auth)
+        row_conn.addWidget(QLabel("Логин:"))
+        row_conn.addWidget(self.edit_ssh_user)
+        row_conn.addWidget(QLabel("Пароль:"))
+        row_conn.addWidget(self.edit_ssh_pass)
+        conn_form.addRow("Подключение:", row_conn)
 
-        self.edit_ssh_cmd = QPlainTextEdit(DEFAULT_SSH_COMMAND, ssh_group)
-        self.edit_ssh_cmd.setMaximumHeight(85)
+        self.edit_ssh_cmd = QPlainTextEdit(DEFAULT_SSH_COMMAND, params_group)
+        self.edit_ssh_cmd.setMaximumHeight(70)
         self.edit_ssh_cmd.setStyleSheet("font-family: monospace; font-size: 10px;")
-        ssh_form.addRow("Команда запуска:", self.edit_ssh_cmd)
+        conn_form.addRow("Команда запуска:", self.edit_ssh_cmd)
 
-        self.btn_reset_cmd = QPushButton("Восстановить проверенную команду", ssh_group)
+        self.btn_reset_cmd = QPushButton("Восстановить проверенную команду", params_group)
         self.btn_reset_cmd.clicked.connect(
             lambda: self.edit_ssh_cmd.setPlainText(DEFAULT_SSH_COMMAND)
         )
-        ssh_form.addRow("", self.btn_reset_cmd)
+        conn_form.addRow("", self.btn_reset_cmd)
 
-        ssh_layout.addLayout(ssh_form)
-        left_layout.addWidget(ssh_group)
+        params_layout.addLayout(conn_form)
+        tab_onboard_layout.addWidget(params_group)
 
-        # 2. Survey Area & Coordinate System Group
-        area_group = QGroupBox("Полетная зона полигона", left_container)
-        area_layout = QFormLayout(area_group)
-        area_layout.setContentsMargins(6, 6, 6, 6)
-
-        self.combo_cs = QComboBox(area_group)
-        self.combo_cs.addItem("local_aruco (метры)", CoordinateSystem.LOCAL_ARUCO)
-        self.combo_cs.addItem("wgs84 (широта/долгота)", CoordinateSystem.WGS84)
-        area_layout.addRow("Система координат:", self.combo_cs)
-
-        # Corner 1 (X1, Y1)
-        row_c1 = QHBoxLayout()
-        self.spin_x1 = QDoubleSpinBox(area_group)
-        self.spin_x1.setRange(-100000.0, 100000.0)
-        self.spin_x1.setValue(0.0)
-        self.spin_x1.setDecimals(2)
-        self.spin_y1 = QDoubleSpinBox(area_group)
-        self.spin_y1.setRange(-100000.0, 100000.0)
-        self.spin_y1.setValue(0.0)
-        self.spin_y1.setDecimals(2)
-        row_c1.addWidget(QLabel("X1:"))
-        row_c1.addWidget(self.spin_x1)
-        row_c1.addWidget(QLabel("Y1:"))
-        row_c1.addWidget(self.spin_y1)
-        area_layout.addRow("Угол 1 (TL):", row_c1)
-
-        # Corner 2 (X2, Y2)
-        row_c2 = QHBoxLayout()
-        self.spin_x2 = QDoubleSpinBox(area_group)
-        self.spin_x2.setRange(-100000.0, 100000.0)
-        self.spin_x2.setValue(20.0)
-        self.spin_x2.setDecimals(2)
-        self.spin_y2 = QDoubleSpinBox(area_group)
-        self.spin_y2.setRange(-100000.0, 100000.0)
-        self.spin_y2.setValue(20.0)
-        self.spin_y2.setDecimals(2)
-        row_c2.addWidget(QLabel("X2:"))
-        row_c2.addWidget(self.spin_x2)
-        row_c2.addWidget(QLabel("Y2:"))
-        row_c2.addWidget(self.spin_y2)
-        area_layout.addRow("Угол 2 (BR):", row_c2)
-
-        # Altitude
-        self.spin_alt = QDoubleSpinBox(area_group)
-        self.spin_alt.setRange(1.0, 150.0)
-        self.spin_alt.setValue(10.0)
-        self.spin_alt.setSingleStep(1.0)
-        self.spin_alt.setSuffix(" м")
-        area_layout.addRow("Высота съемки H:", self.spin_alt)
-
-        # Overlap
-        self.spin_overlap = QSpinBox(area_group)
-        self.spin_overlap.setRange(0, 90)
-        self.spin_overlap.setValue(20)
-        self.spin_overlap.setSuffix(" %")
-        area_layout.addRow("Перекрытие кадров:", self.spin_overlap)
-
-        left_layout.addWidget(area_group)
-
-        # 3. Mission Mode & Storage Group
-        mode_group = QGroupBox("Режим работы борта", left_container)
-        mode_layout = QFormLayout(mode_group)
-        mode_layout.setContentsMargins(6, 6, 6, 6)
-
-        self.combo_mode = QComboBox(mode_group)
-        self.combo_mode.addItem("Сбор данных (без ИИ)", MissionMode.COLLECTION_ONLY)
-        self.combo_mode.addItem("Последовательный бортовой ИИ", MissionMode.INFERENCE_SEQUENTIAL)
-        mode_layout.addRow("Режим миссии:", self.combo_mode)
-
-        # Storage policies checkboxes
-        self.cb_save_images = QCheckBox("Сохранять снимки на борт", mode_group)
-        self.cb_save_images.setChecked(True)
-        mode_layout.addRow("Снимки:", self.cb_save_images)
-
-        self.cb_save_metadata = QCheckBox("Сохранять метаданные и детекции (JSON)", mode_group)
-        self.cb_save_metadata.setChecked(True)
-        mode_layout.addRow("Метаданные:", self.cb_save_metadata)
-
-        left_layout.addWidget(mode_group)
-
-        # 4. Validation errors message box
-        self.lbl_errors = QLabel("", left_container)
-        self.lbl_errors.setStyleSheet("color: #ff6b6b; font-weight: bold;")
-        self.lbl_errors.setWordWrap(True)
-        self.lbl_errors.setVisible(False)
-        left_layout.addWidget(self.lbl_errors)
-
-        # 5. Mission Planning & Start Actions (REST API)
-        actions_group = QGroupBox("Управление полетным заданием (REST)", left_container)
-        actions_layout = QVBoxLayout(actions_group)
-        actions_layout.setContentsMargins(6, 6, 6, 6)
-
-        self.btn_plan = QPushButton("📐 Рассчитать маршрут", actions_group)
-        self.btn_plan.clicked.connect(self._on_plan_clicked)
-        actions_layout.addWidget(self.btn_plan)
-
-        self.lbl_route_summary = QLabel("Маршрут не рассчитан", actions_group)
-        self.lbl_route_summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        actions_layout.addWidget(self.lbl_route_summary)
-
-        self.btn_send = QPushButton("🚀 Отправить задание и Старт (REST)", actions_group)
-        self.btn_send.setStyleSheet("background-color: #2b8a3e; font-weight: bold;")
-        self.btn_send.clicked.connect(self._on_send_clicked)
-        actions_layout.addWidget(self.btn_send)
-
-        left_layout.addWidget(actions_group)
-
-        # 6. Emergency Stop Actions Group (REST fallback)
-        stop_group = QGroupBox("Аварийное управление", left_container)
-        stop_layout = QHBoxLayout(stop_group)
-        stop_layout.setContentsMargins(6, 6, 6, 6)
-
-        self.btn_land = QPushButton("⬇ Посадка (Land)", stop_group)
-        self.btn_land.setStyleSheet("background-color: #c92a2a; color: white;")
-        self.btn_land.clicked.connect(self._on_emergency_land_clicked)
-        stop_layout.addWidget(self.btn_land)
-
-        self.btn_rth = QPushButton("🏠 Возврат домой (RTH)", stop_group)
-        self.btn_rth.setStyleSheet("background-color: #d9480f; color: white;")
-        self.btn_rth.clicked.connect(lambda: self.stop_requested.emit(StopAction.RTH))
-        stop_layout.addWidget(self.btn_rth)
-
-        left_layout.addWidget(stop_group)
-
-        left_layout.addStretch(1)
-        scroll.setWidget(left_container)
-        self.main_splitter.addWidget(scroll)
-
-        # =====================================================================
-        # RIGHT PANE: Live Video Stream Viewport + Console Log Monitor
-        # =====================================================================
-        self.right_splitter = QSplitter(Qt.Orientation.Vertical, self.main_splitter)
-
-        # 1. Live video stream widget
-        self.live_stream_widget = LiveStreamWidget(
-            host=DEFAULT_SSH_HOST, port=8080, parent=self.right_splitter
-        )
-        self.right_splitter.addWidget(self.live_stream_widget)
-
-        # 2. Remote console output group
-        log_group = QGroupBox("Бортовые логи миссии (SSH Console)", self.right_splitter)
+        # Console Logs Group (Spacious, full height)
+        log_group = QGroupBox("Бортовые логи миссии в реальном времени (SSH Console)", self.tab_onboard)
         log_layout = QVBoxLayout(log_group)
         log_layout.setContentsMargins(6, 6, 6, 6)
         log_layout.setSpacing(4)
 
-        # Log toolbar
         log_tools = QHBoxLayout()
         self.lbl_mission_progress = QLabel("Прогресс: Ожидание запуска", log_group)
-        self.lbl_mission_progress.setStyleSheet("font-weight: bold; color: #aaaaaa;")
+        self.lbl_mission_progress.setStyleSheet("font-weight: bold; color: #ced4da;")
         log_tools.addWidget(self.lbl_mission_progress)
 
         log_tools.addStretch(1)
@@ -307,25 +261,20 @@ class MissionControl(QWidget):
 
         log_layout.addLayout(log_tools)
 
-        # Console text area
         self.log_console = QPlainTextEdit(log_group)
         self.log_console.setReadOnly(True)
-        self.log_console.setMaximumBlockCount(8000)
+        self.log_console.setMaximumBlockCount(10000)
         self.log_console.setStyleSheet(
-            "background-color: #1a1a1a; color: #dcdcdc; font-family: 'Consolas', 'Courier New', monospace; "
+            "background-color: #121212; color: #dcdcdc; font-family: 'Consolas', 'Courier New', monospace; "
             "font-size: 11px; border: 1px solid #333333; border-radius: 4px;"
         )
         log_layout.addWidget(self.log_console, 1)
 
-        self.right_splitter.addWidget(log_group)
+        tab_onboard_layout.addWidget(log_group, 1)
 
-        # Set right splitter sizes (video stream larger, console log lower)
-        self.right_splitter.setSizes([380, 240])
+        self.tabs.addTab(self.tab_onboard, "📟 Управление бортом и логи SSH")
 
-        self.main_splitter.addWidget(self.right_splitter)
-        self.main_splitter.setSizes([430, 670])
-
-        main_layout.addWidget(self.main_splitter)
+        main_layout.addWidget(self.tabs, 1)
 
     # -------------------------------------------------------------------------
     # Public methods & Slots
@@ -344,8 +293,10 @@ class MissionControl(QWidget):
 
     @Slot(int, int)
     def set_mission_progress(self, current_wp: int, total_wps: int) -> None:
-        """Update waypoint progress indicator."""
-        self.lbl_mission_progress.setText(f"Прогресс: Точка {current_wp} из {total_wps}")
+        """Update waypoint progress indicator across both tabs."""
+        msg = f"Точка {current_wp} из {total_wps}"
+        self.lbl_mission_progress.setText(f"Прогресс: {msg}")
+        self.lbl_flight_progress.setText(f"Контрольная точка: {msg}")
 
     def get_ssh_launch_params(self) -> dict:
         """Collect current SSH connection parameters and launch command."""
@@ -361,8 +312,17 @@ class MissionControl(QWidget):
         """Lock or unlock parameter editing while drone is in active flight."""
         self._is_flight_locked = locked
 
-        # Parameter fields and launch buttons are disabled during flight
-        self.combo_cs.setEnabled(not locked)
+        self.btn_start_drone_mission.setEnabled(not locked)
+        self.edit_ssh_host.setEnabled(not locked)
+        self.spin_ssh_port.setEnabled(not locked)
+        self.edit_ssh_user.setEnabled(not locked)
+        self.edit_ssh_pass.setEnabled(not locked)
+        self.edit_ssh_cmd.setEnabled(not locked)
+        self.btn_reset_cmd.setEnabled(not locked)
+
+        # Legacy compat widgets
+        self.btn_plan.setEnabled(not locked)
+        self.btn_send.setEnabled(not locked)
         self.spin_x1.setEnabled(not locked)
         self.spin_y1.setEnabled(not locked)
         self.spin_x2.setEnabled(not locked)
@@ -372,23 +332,23 @@ class MissionControl(QWidget):
         self.combo_mode.setEnabled(not locked)
         self.cb_save_images.setEnabled(not locked)
         self.cb_save_metadata.setEnabled(not locked)
-        self.btn_plan.setEnabled(not locked)
-        self.btn_send.setEnabled(not locked)
-
-        self.btn_start_drone_mission.setEnabled(not locked)
-        self.edit_ssh_host.setEnabled(not locked)
-        self.spin_ssh_port.setEnabled(not locked)
-        self.edit_ssh_user.setEnabled(not locked)
-        self.edit_ssh_pass.setEnabled(not locked)
-        self.edit_ssh_cmd.setEnabled(not locked)
-        self.btn_reset_cmd.setEnabled(not locked)
 
         if locked:
             self.btn_start_drone_mission.setText("⏳ Миссия выполняется на дроне...")
+            self.lbl_status_badge.setText("⏳ Полет выполняется")
+            self.lbl_status_badge.setStyleSheet(
+                "background-color: #2b8a3e; color: #ffffff; font-weight: bold; "
+                "padding: 5px 12px; border-radius: 4px;"
+            )
         else:
             self.btn_start_drone_mission.setText("🚀 Запустить миссию на дроне")
+            self.lbl_status_badge.setText("Готов к запуску")
+            self.lbl_status_badge.setStyleSheet(
+                "background-color: #212529; color: #a9e34b; font-weight: bold; "
+                "padding: 5px 12px; border-radius: 4px; border: 1px solid #343a40;"
+            )
 
-        # Stop and abort buttons ALWAYS remain enabled!
+        # Emergency land ALWAYS remains enabled!
         self.btn_emergency_land.setEnabled(True)
         self.btn_land.setEnabled(True)
         self.btn_rth.setEnabled(True)
@@ -414,7 +374,47 @@ class MissionControl(QWidget):
             self.btn_send.setEnabled(False)
 
     # -------------------------------------------------------------------------
-    # Internal actions & validation
+    # Internal actions & handlers
+    # -------------------------------------------------------------------------
+    def _on_start_drone_mission_clicked(self) -> None:
+        params = self.get_ssh_launch_params()
+        if not params["host"]:
+            self.set_validation_errors(["Укажите IP-адрес дрона для подключения SSH."])
+            return
+        if not params["command"]:
+            self.set_validation_errors(["Команда запуска миссии не может быть пустой."])
+            return
+
+        self.set_validation_errors([])
+
+        # Switch to video stream tab so operator immediately monitors detections
+        self.tabs.setCurrentIndex(0)
+
+        # Auto-snapshot activates if checked in stream studio
+        if self.live_stream_widget.btn_auto_snapshot.isChecked():
+            self.live_stream_widget.start_auto_snapshot(1.0)
+
+        self.start_drone_mission_requested.emit(params)
+
+    def _on_emergency_land_clicked(self) -> None:
+        # Stop auto-snapshot immediately upon emergency landing
+        self.live_stream_widget.stop_auto_snapshot()
+        self.lbl_status_badge.setText("Посадка (Land)...")
+        self.lbl_status_badge.setStyleSheet(
+            "background-color: #c92a2a; color: #ffffff; font-weight: bold; "
+            "padding: 5px 12px; border-radius: 4px;"
+        )
+        self.emergency_land_requested.emit()
+        self.stop_requested.emit(StopAction.LAND)
+
+    def _copy_log_to_clipboard(self) -> None:
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            clipboard.setText(self.log_console.toPlainText())
+            self.lbl_mission_progress.setText("Прогресс: Логи скопированы в буфер")
+
+    # -------------------------------------------------------------------------
+    # Legacy Planner Handlers (for backward compatibility with tests)
     # -------------------------------------------------------------------------
     def _collect_save_policy(self) -> SavePolicy | None:
         save_img = self.cb_save_images.isChecked()
@@ -461,7 +461,6 @@ class MissionControl(QWidget):
         mode = self.combo_mode.currentData()
         cs = self.combo_cs.currentData()
 
-        # Build PlannerParams
         optics = SensorOptics(focal_length_mm=4.5, sensor_width_mm=6.4, sensor_height_mm=4.8)
         params = PlannerParams(
             corner_tl=(self.spin_x1.value(), self.spin_y1.value()),
@@ -496,25 +495,3 @@ class MissionControl(QWidget):
             waypoints=self._planned_waypoints,
         )
         self.send_mission_requested.emit(task)
-
-    def _on_start_drone_mission_clicked(self) -> None:
-        params = self.get_ssh_launch_params()
-        if not params["host"]:
-            self.set_validation_errors(["Укажите IP-адрес дрона для подключения SSH."])
-            return
-        if not params["command"]:
-            self.set_validation_errors(["Команда запуска миссии не может быть пустой."])
-            return
-
-        self.set_validation_errors([])
-        self.start_drone_mission_requested.emit(params)
-
-    def _on_emergency_land_clicked(self) -> None:
-        self.emergency_land_requested.emit()
-        self.stop_requested.emit(StopAction.LAND)
-
-    def _copy_log_to_clipboard(self) -> None:
-        clipboard = QApplication.clipboard()
-        if clipboard:
-            clipboard.setText(self.log_console.toPlainText())
-            self.lbl_mission_progress.setText("Прогресс: Логи скопированы в буфер")

@@ -151,3 +151,20 @@ def test_mission_control_logging_and_progress(qtbot):
     mc.clear_log()
     assert mc.log_console.toPlainText() == ""
 
+
+def test_mission_control_auto_snapshot_on_flight_start(qtbot):
+    """Test that launching flight automatically initiates auto-snapshot every second."""
+    mc = MissionControl()
+    qtbot.addWidget(mc)
+
+    mc.cb_auto_snapshot.setChecked(True)
+    assert mc.live_stream_widget.is_auto_snapshot_active() is False
+
+    mc.btn_start_drone_mission.click()
+    assert mc.live_stream_widget.is_auto_snapshot_active() is True
+
+    # Emergency land should stop auto snapshot
+    mc.btn_emergency_land.click()
+    assert mc.live_stream_widget.is_auto_snapshot_active() is False
+
+

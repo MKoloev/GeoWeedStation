@@ -93,3 +93,34 @@ def test_live_stream_widget_save_snapshot(sample_pixmap, tmp_path: Path, qtbot):
     assert Path(saved).exists()
     assert len(saved_paths) == 1
     assert "snap_" in saved
+
+
+def test_live_stream_widget_auto_snapshot(sample_pixmap, tmp_path: Path, qtbot):
+    """Test auto-snapshot timer triggering and toggle button."""
+    widget = LiveStreamWidget()
+    qtbot.addWidget(widget)
+    widget._snapshots_dir = tmp_path / "snapshots"
+
+    saved_paths: list[str] = []
+    widget.snapshot_saved.connect(saved_paths.append)
+
+    # Set frame
+    widget.set_frame(sample_pixmap)
+
+    # Start auto snapshot with very short interval for test
+    widget.start_auto_snapshot(interval_s=0.05)
+    assert widget.is_auto_snapshot_active() is True
+    assert widget.btn_auto_snapshot.isChecked() is True
+
+    # Wait for timer ticks
+    qtbot.waitUntil(lambda: len(saved_paths) >= 2, timeout=2000)
+
+    # Stop auto snapshot
+    widget.stop_auto_snapshot()
+    assert widget.is_auto_snapshot_active() is False
+    assert widget.btn_auto_snapshot.isChecked() is False
+
+    initial_count = len(saved_paths)
+    qtbot.wait(100)
+    assert len(saved_paths) == initial_count
+
