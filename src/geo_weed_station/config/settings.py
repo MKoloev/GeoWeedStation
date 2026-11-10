@@ -60,6 +60,46 @@ class NetworkSettings(BaseModel):
         return v
 
 
+class SshSettings(BaseModel):
+    """SSH connection and remote launch settings for Skyris onboard computer."""
+
+    host: str = "10.42.0.1"
+    port: int = 22
+    username: str = "orangepi"
+    password: str = "orangepi"
+    connect_timeout_s: float = 10.0
+    remote_dir: str = "/home/orangepi/tsu/CollectOnboardImage"
+    launch_command: str = (
+        'bash -l -c "cd /home/orangepi/tsu/CollectOnboardImage && python3 main.py '
+        '--input-dir data_image/06_geosaero_corner_25_wgs84_10pct_aruc_ex '
+        '--model models/yolox_m_rk3588_int8.rknn '
+        '--waypoints waypoints/zigzag_skyris.json '
+        '--geotag-mode drone_telemetry '
+        '--altitude 2.0 '
+        '--speed 0.5 '
+        '--hover-delay 1.0 '
+        '--nav-timeout 20.0 '
+        '--conf-thresh 0.35"'
+    )
+
+
+class StreamSettings(BaseModel):
+    """HTTP web_video_server stream and snapshot polling settings."""
+
+    host: str = "10.42.0.1"
+    port: int = 8080
+    topic: str = "/yolo/debug"
+    poll_rate_hz: float = 3.0
+    request_timeout_s: float = 1.5
+
+    @field_validator("poll_rate_hz")
+    @classmethod
+    def validate_poll_rate(cls, v: float) -> float:
+        if not (0.5 <= v <= 10.0):
+            raise ValueError(f"poll_rate_hz must be in range [0.5, 10.0], got {v}")
+        return v
+
+
 class DetectorSettings(BaseModel):
     """ONNX neural network detector parameters."""
 
@@ -137,6 +177,8 @@ class AppSettings(BaseSettings):
     """Root application configuration."""
 
     network: NetworkSettings = Field(default_factory=NetworkSettings)
+    ssh: SshSettings = Field(default_factory=SshSettings)
+    stream: StreamSettings = Field(default_factory=StreamSettings)
     detector: DetectorSettings = Field(default_factory=DetectorSettings)
     map: MapSettings = Field(default_factory=MapSettings)
     workdir: Path = Path("workdir")

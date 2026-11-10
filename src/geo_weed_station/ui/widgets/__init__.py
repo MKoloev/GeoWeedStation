@@ -6,6 +6,7 @@ from geo_weed_station.ui.widgets.detection_filter_panel import (
 )
 from geo_weed_station.ui.widgets.file_list_panel import FileListPanel
 from geo_weed_station.ui.widgets.image_viewer import ImageViewer
+from geo_weed_station.ui.widgets.live_stream_widget import LiveStreamWidget
 from geo_weed_station.ui.widgets.map_canvas import MapCanvas
 from geo_weed_station.ui.widgets.map_info_panel import MapInfoPanel
 from geo_weed_station.ui.widgets.mission_control import MissionControl
@@ -19,6 +20,7 @@ __all__ = [
     "DetectionFilterState",
     "FileListPanel",
     "ImageViewer",
+    "LiveStreamWidget",
     "MapCanvas",
     "MapInfoPanel",
     "MissionControl",

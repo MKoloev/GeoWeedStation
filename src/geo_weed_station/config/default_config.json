@@ -9,6 +9,22 @@
     "reconnect_backoff_factor": 2.0,
     "download_chunk_bytes": 65536
   },
+  "ssh": {
+    "host": "10.42.0.1",
+    "port": 22,
+    "username": "orangepi",
+    "password": "orangepi",
+    "connect_timeout_s": 10.0,
+    "remote_dir": "/home/orangepi/tsu/CollectOnboardImage",
+    "launch_command": "bash -l -c \"cd /home/orangepi/tsu/CollectOnboardImage && python3 main.py --input-dir data_image/06_geosaero_corner_25_wgs84_10pct_aruc_ex --model models/yolox_m_rk3588_int8.rknn --waypoints waypoints/zigzag_skyris.json --geotag-mode drone_telemetry --altitude 2.0 --speed 0.5 --hover-delay 1.0 --nav-timeout 20.0 --conf-thresh 0.35\""
+  },
+  "stream": {
+    "host": "10.42.0.1",
+    "port": 8080,
+    "topic": "/yolo/debug",
+    "poll_rate_hz": 3.0,
+    "request_timeout_s": 1.5
+  },
   "detector": {
     "model_path": "models/weed_detection_yolo.onnx",
     "classes_path": "models/classes.json",

@@ -1,9 +1,11 @@
-"""Online mode controller managing drone telemetry, mission dispatch, live tracking and aborts."""
+"""Online mode controller managing drone telemetry, mission dispatch, live tracking, and SSH/Stream workers."""
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
@@ -34,13 +36,15 @@ from geo_weed_station.ui.widgets.mission_control import MissionControl
 from geo_weed_station.ui.widgets.telemetry_panel import TelemetryPanel
 from geo_weed_station.workers.base_worker import start_in_thread
 from geo_weed_station.workers.command_worker import CommandWorker
+from geo_weed_station.workers.live_stream_worker import LiveStreamWorker
+from geo_weed_station.workers.ssh_mission_worker import SshMissionWorker
 from geo_weed_station.workers.telemetry_worker import TelemetryWorker
 
 logger = logging.getLogger(__name__)
 
 
 class OnlineController(QObject):
-    """Orchestrates online drone communication, mission upload, live telemetry, and emergency stops."""
+    """Orchestrates online drone communication, mission upload, live telemetry, video streaming and SSH runs."""
 
     connection_state_changed = Signal(ConnectionState)
     status_updated = Signal(DroneStatus)
@@ -70,6 +74,12 @@ class OnlineController(QObject):
         self._telemetry_thread: QThread | None = None
         self._command_thread: QThread | None = None
 
+        # SSH Mission and Live Stream Workers
+        self._ssh_worker: SshMissionWorker | None = None
+        self._ssh_thread: QThread | None = None
+        self._stream_worker: LiveStreamWorker | None = None
+        self._stream_thread: QThread | None = None
+
         self._last_status: DroneStatus | None = None
         self._flight_start_time: float | None = None
         self._active_run_id: str | None = None
@@ -87,16 +97,24 @@ class OnlineController(QObject):
         self._window.add_mode_panel(AppMode.ONLINE, self.telemetry_panel, "Телеметрия БПЛА")
 
     def _wire_signals(self) -> None:
+        # Existing mission planner & REST commands
         self.mission_control.plan_requested.connect(self.plan)
         self.mission_control.send_mission_requested.connect(self.send_mission)
         self.mission_control.stop_requested.connect(self.stop)
+
+        # SSH Mission launch and abort
+        self.mission_control.start_drone_mission_requested.connect(self.start_ssh_mission)
+        self.mission_control.emergency_land_requested.connect(self.emergency_land)
+
+        # Live Stream Widget events
+        self.mission_control.live_stream_widget.topic_changed.connect(self._on_stream_topic_changed)
 
     # -------------------------------------------------------------------------
     # Network Connection Lifecycle
     # -------------------------------------------------------------------------
     @Slot(str, int)
     def connect_to(self, host: str, port: int) -> None:
-        """Connect to onboard REST API and initiate background telemetry polling."""
+        """Connect to onboard REST API and initiate background telemetry and stream polling."""
         self.disconnect()
 
         base_url = f"http://{host}:{port}"
@@ -124,9 +142,13 @@ class OnlineController(QObject):
         self._command_thread = start_in_thread(self._command_worker, "command_worker_thread")
         self._window.register_thread(self._command_thread, self._command_worker)
 
+        # 3. Live Video Stream Worker (default ROS web_video_server port 8080)
+        stream_port = getattr(self._settings.stream, "port", 8080) if hasattr(self._settings, "stream") else 8080
+        self.start_stream(host=host, port=stream_port)
+
     @Slot()
     def disconnect(self) -> None:
-        """Stop background telemetry and command workers."""
+        """Stop background telemetry, command, stream, and SSH workers."""
         if self._telemetry_worker is not None:
             self._telemetry_worker.request_stop()
             self._telemetry_worker = None
@@ -134,11 +156,161 @@ class OnlineController(QObject):
             self._command_worker.request_stop()
             self._command_worker = None
 
+        self.stop_stream()
+        self.stop_ssh_mission()
+
         self._window.status_bar_panel.set_connection_state(ConnectionState.DISCONNECTED)
         self._window.status_bar_panel.set_message("Соединение с БПЛА разорвано")
 
     # -------------------------------------------------------------------------
-    # Mission Planning & Dispatch
+    # Live Video Stream Management
+    # -------------------------------------------------------------------------
+    @Slot(str, int)
+    def start_stream(self, host: str | None = None, port: int | None = None) -> None:
+        """Start or restart the background live stream polling worker."""
+        self.stop_stream()
+
+        stream_host = host or getattr(self._settings.stream, "host", "10.42.0.1") if hasattr(self._settings, "stream") else "10.42.0.1"
+        stream_port = port or getattr(self._settings.stream, "port", 8080) if hasattr(self._settings, "stream") else 8080
+        topic = self.mission_control.live_stream_widget.current_topic()
+        poll_rate = getattr(self._settings.stream, "poll_rate_hz", 3.0) if hasattr(self._settings, "stream") else 3.0
+
+        self.mission_control.live_stream_widget.set_endpoint(stream_host, stream_port)
+
+        self._stream_worker = LiveStreamWorker(
+            host=stream_host,
+            port=stream_port,
+            topic=topic,
+            poll_rate_hz=poll_rate,
+        )
+        self._stream_worker.frame_ready.connect(self.mission_control.live_stream_widget.set_frame)
+        self._stream_worker.status_changed.connect(self.mission_control.live_stream_widget.set_status)
+
+        self._stream_thread = start_in_thread(self._stream_worker, "live_stream_worker_thread")
+        self._window.register_thread(self._stream_thread, self._stream_worker)
+        logger.info("LiveStreamWorker initiated for %s:%d (topic=%s)", stream_host, stream_port, topic)
+
+    @Slot()
+    def stop_stream(self) -> None:
+        """Stop background live stream worker."""
+        if self._stream_worker is not None:
+            self._stream_worker.request_stop()
+            self._stream_worker = None
+        self._stream_thread = None
+
+    def _on_stream_topic_changed(self, new_topic: str) -> None:
+        """Forward UI topic selection to active stream worker."""
+        if self._stream_worker is not None:
+            self._stream_worker.set_topic(new_topic)
+
+    # -------------------------------------------------------------------------
+    # SSH Mission Execution & Emergency Abort (Skyris Orange Pi)
+    # -------------------------------------------------------------------------
+    @Slot(dict)
+    def start_ssh_mission(self, params: dict | None = None) -> None:
+        """Launch autonomous collection mission on Orange Pi 5 Pro over SSH."""
+        if self._ssh_worker is not None and not self._ssh_worker.is_stop_requested:
+            self.mission_control.append_log("⚠️ Миссия уже выполняется на дроне!")
+            return
+
+        cfg_params = params or self.mission_control.get_ssh_launch_params()
+        host = cfg_params.get("host", "10.42.0.1")
+        port = int(cfg_params.get("port", 22))
+        username = cfg_params.get("username", "orangepi")
+        password = cfg_params.get("password", "orangepi")
+        command = cfg_params.get("command", "")
+
+        local_runs_dir = self._settings.workdir / "runs"
+        local_runs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Ensure video stream worker is active on the drone host
+        if self._stream_worker is None:
+            stream_port = getattr(self._settings.stream, "port", 8080) if hasattr(self._settings, "stream") else 8080
+            self.start_stream(host=host, port=stream_port)
+
+        self._ssh_worker = SshMissionWorker(
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+            command=command,
+            local_runs_dir=local_runs_dir,
+        )
+
+        self._ssh_worker.log_received.connect(self.mission_control.append_log)
+        self._ssh_worker.progress_updated.connect(self.mission_control.set_mission_progress)
+        self._ssh_worker.mission_started.connect(self._on_ssh_mission_started)
+        self._ssh_worker.mission_finished.connect(self._on_ssh_mission_finished)
+        self._ssh_worker.summary_downloaded.connect(self._on_ssh_summary_downloaded)
+        self._ssh_worker.failed.connect(self._on_ssh_mission_failed)
+
+        self.mission_control.set_flight_locked(True)
+        self._flight_start_time = time.time()
+        self._window.status_bar_panel.set_message("Запуск автономной миссии на дроне Skyris (SSH)...")
+
+        self._ssh_thread = start_in_thread(self._ssh_worker, "ssh_mission_worker_thread")
+        self._window.register_thread(self._ssh_thread, self._ssh_worker)
+
+    @Slot()
+    def emergency_land(self) -> None:
+        """Send SIGINT (Ctrl+C) to running remote mission and issue REST land fallback."""
+        logger.warning("Emergency land triggered from MissionControl")
+        self._window.status_bar_panel.set_message("Экстренная посадка: отправка SIGINT (Ctrl+C) на дрон...")
+
+        if self._ssh_worker is not None:
+            self._ssh_worker.abort_mission()
+
+        if self._command_worker is not None:
+            self._command_worker.stop_mission(StopAction.LAND)
+
+    @Slot()
+    def stop_ssh_mission(self) -> None:
+        """Stop SSH mission worker if running."""
+        if self._ssh_worker is not None:
+            self._ssh_worker.abort_mission()
+            self._ssh_worker = None
+        self._ssh_thread = None
+
+    def _on_ssh_mission_started(self) -> None:
+        self._window.status_bar_panel.set_message("Миссия Skyris выполняется на дроне (SSH)...")
+
+    def _on_ssh_mission_finished(self, success: bool, message: str) -> None:
+        self.mission_control.set_flight_locked(False)
+        self._flight_start_time = None
+        self._ssh_worker = None
+        self._ssh_thread = None
+        self._window.status_bar_panel.set_message(message)
+
+    def _on_ssh_mission_failed(self, error: str) -> None:
+        self.mission_control.set_flight_locked(False)
+        self._flight_start_time = None
+        self._ssh_worker = None
+        self._ssh_thread = None
+        self._window.status_bar_panel.set_message(f"Ошибка миссии: {error}")
+
+    def _on_ssh_summary_downloaded(self, summary_path_str: str) -> None:
+        """Parse downloaded summary.json from drone and plot detections on map."""
+        summary_path = Path(summary_path_str)
+        if not summary_path.exists():
+            return
+
+        try:
+            with open(summary_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            summary = SummaryDetections.model_validate(data)
+            self._map_ctrl.on_summary(summary)
+            self._window.status_bar_panel.set_message(
+                f"Данные детекций миссии {summary.run_id} успешно нанесены на карту"
+            )
+            self.mission_control.append_log(
+                f"\n🗺️ Детекции сорняков ({summary.detections_count} шт.) нанесены на карту станции."
+            )
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
+            logger.warning("Failed to parse downloaded mission summary %s: %s", summary_path, exc)
+            self.mission_control.append_log(f"⚠️ Ошибка парсинга артефакта summary.json: {exc}")
+
+    # -------------------------------------------------------------------------
+    # Mission Planning & Dispatch (REST API)
     # -------------------------------------------------------------------------
     @Slot(object)
     def plan(self, params) -> None:
@@ -151,7 +323,7 @@ class OnlineController(QObject):
                 f"Маршрут рассчитан: {len(waypoints)} точек съемки"
             )
         except Exception as exc:
-            logger.exception("Failed to plan mission: %s", exc)
+            logger.exception("Failed to plan mission")
             self.mission_control.set_validation_errors([f"Ошибка расчета маршрута: {exc}"])
 
     @Slot(MissionTask)
@@ -175,6 +347,10 @@ class OnlineController(QObject):
     @Slot(StopAction)
     def stop(self, action: StopAction) -> None:
         """Issue confirmed emergency stop or return-to-home command."""
+        # Also abort active SSH mission if landing
+        if action == StopAction.LAND and self._ssh_worker is not None:
+            self._ssh_worker.abort_mission()
+
         if self._command_worker is None:
             return
 

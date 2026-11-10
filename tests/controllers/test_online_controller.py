@@ -126,3 +126,78 @@ def test_online_controller_status_updates_marker_and_telemetry(online_setup, qtb
     ctrl.on_status(status)
     assert len(canvas._drone_group.childItems()) == 2
     assert "10.00" in ctrl.telemetry_panel.lbl_pos_xy.text()
+
+
+def test_online_controller_start_ssh_mission_and_emergency_land(online_setup, qtbot):
+    """Test start_ssh_mission launches worker and emergency_land aborts it."""
+    from unittest.mock import MagicMock, patch
+
+    ctrl, _map_ctrl, _window, _canvas, _ = online_setup
+
+    mock_client = MagicMock()
+    mock_transport = MagicMock()
+    mock_channel = MagicMock()
+    mock_channel.recv_ready.return_value = False
+    mock_channel.exit_status_ready.return_value = False
+    mock_transport.open_session.return_value = mock_channel
+    mock_client.get_transport.return_value = mock_transport
+
+    with patch("geo_weed_station.workers.ssh_mission_worker.paramiko.SSHClient", return_value=mock_client), \
+         patch("geo_weed_station.controllers.online_controller.start_in_thread") as mock_start:
+        mock_thread = MagicMock()
+        mock_start.return_value = mock_thread
+
+        ctrl.start_ssh_mission({
+            "host": "10.42.0.1",
+            "port": 22,
+            "username": "orangepi",
+            "password": "orangepi",
+            "command": "python3 main.py",
+        })
+
+        assert ctrl._ssh_worker is not None
+        assert ctrl._ssh_worker.host == "10.42.0.1"
+        assert ctrl.mission_control._is_flight_locked is True
+
+        # Test emergency land triggers abort
+        with patch.object(ctrl._ssh_worker, "abort_mission") as mock_abort:
+            ctrl.emergency_land()
+            mock_abort.assert_called_once()
+
+
+def test_online_controller_ssh_summary_loaded_to_map(online_setup, tmp_path):
+    """Test downloading and plotting summary.json onto map engine."""
+    import json
+    from geo_weed_station.schemas.onboard_api import SummaryDetections
+
+    ctrl, map_ctrl, _window, canvas, _ = online_setup
+
+    summary_file = tmp_path / "summary.json"
+    summary_data = {
+        "run_id": "run_test_001",
+        "coordinate_system": "aruco_local",
+        "detections_count": 1,
+        "items": [
+            {
+                "wp_index": 0,
+                "timestamp": 1234567.89,
+                "camera_x": 5.0,
+                "camera_y": 6.0,
+                "altitude_m": 2.0,
+                "detections": [
+                    {
+                        "class_name": "weed",
+                        "confidence": 0.95,
+                        "bbox_px": [100, 100, 200, 200],
+                        "target_local_coords": {"x": 5.2, "y": 6.3},
+                    }
+                ],
+            }
+        ],
+    }
+    with open(summary_file, "w", encoding="utf-8") as f:
+        json.dump(summary_data, f)
+
+    ctrl._on_ssh_summary_downloaded(str(summary_file))
+    assert len(map_ctrl.engine.weed_map.points) > 0
+

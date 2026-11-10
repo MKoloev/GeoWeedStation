@@ -97,8 +97,57 @@ def test_mission_control_flight_locking(qtbot):
     # Stop buttons MUST remain enabled during flight!
     assert mc.btn_land.isEnabled()
     assert mc.btn_rth.isEnabled()
+    assert not mc.btn_start_drone_mission.isEnabled()
+    assert mc.btn_emergency_land.isEnabled()
 
     mc.set_flight_locked(False)
     assert mc.spin_x1.isEnabled()
     assert mc.spin_alt.isEnabled()
     assert mc.btn_plan.isEnabled()
+    assert mc.btn_start_drone_mission.isEnabled()
+
+
+def test_mission_control_ssh_launch_and_emergency_land(qtbot):
+    """Test start drone mission and emergency land buttons."""
+    mc = MissionControl()
+    qtbot.addWidget(mc)
+
+    drone_start_requests: list[dict] = []
+    emergency_lands: list[bool] = []
+    stops: list[StopAction] = []
+
+    mc.start_drone_mission_requested.connect(drone_start_requests.append)
+    mc.emergency_land_requested.connect(lambda: emergency_lands.append(True))
+    mc.stop_requested.connect(stops.append)
+
+    # Click start drone mission
+    mc.btn_start_drone_mission.click()
+    assert len(drone_start_requests) == 1
+    params = drone_start_requests[0]
+    assert params["host"] == "10.42.0.1"
+    assert params["port"] == 22
+    assert params["username"] == "orangepi"
+    assert "main.py" in params["command"]
+
+    # Click emergency land
+    mc.btn_emergency_land.click()
+    assert len(emergency_lands) == 1
+    assert StopAction.LAND in stops
+
+
+def test_mission_control_logging_and_progress(qtbot):
+    """Test console logging output and progress label updates."""
+    mc = MissionControl()
+    qtbot.addWidget(mc)
+
+    mc.append_log("Line 1: Starting mission")
+    mc.append_log("Line 2: Takeoff OK")
+    assert "Line 1" in mc.log_console.toPlainText()
+    assert "Line 2" in mc.log_console.toPlainText()
+
+    mc.set_mission_progress(3, 10)
+    assert "3 из 10" in mc.lbl_mission_progress.text()
+
+    mc.clear_log()
+    assert mc.log_console.toPlainText() == ""
+
