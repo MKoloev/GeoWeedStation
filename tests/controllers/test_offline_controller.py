@@ -260,4 +260,167 @@ def test_offline_controller_open_video_and_reopen(offline_setup, qtbot, monkeypa
         ctrl._video_worker.request_stop()
 
 
+def test_offline_controller_save_annotations_when_empty(offline_setup, qtbot):
+    ctrl, _map_ctrl, win, tmp_path = offline_setup
+    qtbot.addWidget(win)
+
+    ctrl.save_annotations()
+    assert "Нет разметки для сохранения" in win.status_bar_panel.label_message.text()
+    assert not (tmp_path / "annotations.json").exists()
+
+
+def test_offline_controller_save_and_preload_annotations(offline_setup, qtbot, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    from tests.helpers.make_media import make_real_jpeg
+    from tests.helpers.make_xmp_image import SAMPLE_XMP_LOCAL_ARUCO
+
+    ctrl, map_ctrl, win, tmp_path = offline_setup
+    qtbot.addWidget(win)
+
+    folder = tmp_path / "test_survey"
+    folder.mkdir()
+    img_path = folder / "frame_001.jpg"
+    make_real_jpeg(img_path, SAMPLE_XMP_LOCAL_ARUCO)
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args, **kwargs: str(folder))
+
+    # 1. Open folder
+    ctrl.open_folder()
+    assert len(ctrl.file_list_panel.model.entries) == 1
+    # Initially no annotations file, no detections
+    assert (folder / "annotations.json").exists() is False
+    assert len(ctrl._detections_by_path) == 0
+
+    # 2. Run batch processing
+    ctrl.start_batch()
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+
+    # After batch: detections exist in memory, BUT annotations.json is NOT saved yet
+    assert len(ctrl._detections_by_path) > 0
+    assert (folder / "annotations.json").exists() is False  # Saving ONLY on button click!
+
+    # 3. User clicks save annotations
+    ctrl.save_annotations()
+    annot_file = folder / "annotations.json"
+    assert annot_file.is_file()
+    assert "Разметка успешно сохранена" in win.status_bar_panel.label_message.text()
+
+    # 4. Clear and re-open folder: should automatically preload the annotations!
+    ctrl.file_list_panel.clear()
+    assert len(ctrl._detections_by_path) == 0
+
+    ctrl.open_folder()
+    # Verify preloaded state
+    assert len(ctrl._detections_by_path) > 0
+    assert ctrl.file_list_panel.model.index(0, 2).data() == "Готово"
+    assert ctrl.file_list_panel.model.index(0, 4).data() == "1"
+    assert "Подгружена разметка" in win.status_bar_panel.label_message.text()
+    assert len(ctrl.image_viewer._detection_items) == 1
+
+    # 5. User can still re-run batch processing!
+    ctrl.start_batch()
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+    assert ctrl.file_list_panel.model.index(0, 2).data() == "Готово"
+
+
+def test_offline_controller_status_fidelity_on_reload(offline_setup, qtbot, monkeypatch):
+    """Verify that when saving and reloading, images with NO_METADATA and 0 detections keep their exact statuses."""
+    from PySide6.QtWidgets import QFileDialog
+    from tests.helpers.make_media import make_real_jpeg
+    from tests.helpers.make_xmp_image import SAMPLE_XMP_LOCAL_ARUCO
+
+    ctrl, _map_ctrl, win, tmp_path = offline_setup
+    qtbot.addWidget(win)
+
+    folder = tmp_path / "mixed_survey"
+    folder.mkdir()
+
+    # Image 1: with XMP
+    img1 = folder / "frame_001.jpg"
+    make_real_jpeg(img1, SAMPLE_XMP_LOCAL_ARUCO)
+
+    # Image 2: plain JPEG without XMP
+    img2 = folder / "frame_002.jpg"
+    make_real_jpeg(img2, None)
+
+    # Image 3: with XMP but 0 weeds
+    img3 = folder / "frame_003.jpg"
+    make_real_jpeg(img3, SAMPLE_XMP_LOCAL_ARUCO)
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args, **kwargs: str(folder))
+
+    ctrl.open_folder()
+    assert len(ctrl.file_list_panel.model.entries) == 3
+
+    # Provide custom detections:
+    # frame_001 has 1 weed, frame_002 has 0 weeds, frame_003 has 0 weeds
+    from geo_weed_station.schemas.entities import BBox, DetectedWeed
+    from geo_weed_station.schemas.session import ProcessingStatus
+
+    weed = DetectedWeed(
+        weed_id="w1",
+        class_id=0,
+        class_name="weed",
+        confidence=0.9,
+        bbox=BBox(x=0.1, y=0.1, w=0.2, h=0.2),
+        world_x=1.0,
+        world_y=2.0,
+    )
+    ctrl._detections_by_path[str(img1)] = [weed]
+    ctrl._detections_by_path[str(img2)] = []
+    ctrl._detections_by_path[str(img3)] = []
+
+    # Update statuses as if worker processed them:
+    # frame_001: DONE (has XMP, 1 weed)
+    # frame_002: NO_METADATA (no XMP, 0 weeds)
+    # frame_003: DONE (has XMP, 0 weeds)
+    ctrl.file_list_panel.update_status(0, ProcessingStatus.DONE)
+    ctrl.file_list_panel.update_entry_metadata(0, has_xmp=True, detections_count=1)
+
+    ctrl.file_list_panel.update_status(1, ProcessingStatus.NO_METADATA)
+    ctrl.file_list_panel.update_entry_metadata(1, has_xmp=False, detections_count=0)
+
+    ctrl.file_list_panel.update_status(2, ProcessingStatus.DONE)
+    ctrl.file_list_panel.update_entry_metadata(2, has_xmp=True, detections_count=0)
+
+    assert ctrl.file_list_panel.model.index(0, 2).data() == "Готово"
+    assert ctrl.file_list_panel.model.index(0, 4).data() == "1"
+    assert ctrl.file_list_panel.model.index(1, 2).data() == "Без XMP"
+    assert ctrl.file_list_panel.model.index(1, 4).data() == "0"
+    assert ctrl.file_list_panel.model.index(2, 2).data() == "Готово"
+    assert ctrl.file_list_panel.model.index(2, 4).data() == "0"
+
+    # Save annotations
+    ctrl.save_annotations()
+    assert (folder / "annotations.json").is_file()
+
+    # Clear and re-open
+    ctrl.file_list_panel.clear()
+    ctrl._detections_by_path.clear()
+    assert len(ctrl.file_list_panel.model.entries) == 0
+
+    ctrl.open_folder()
+    assert len(ctrl.file_list_panel.model.entries) == 3
+
+    # Status of frame_001 MUST still be "Готово" and count "1"
+    assert ctrl.file_list_panel.model.index(0, 2).data() == "Готово"
+    assert ctrl.file_list_panel.model.index(0, 4).data() == "1"
+
+    # Status of frame_002 MUST still be "Без XMP" and count "0"
+    assert ctrl.file_list_panel.model.index(1, 2).data() == "Без XMP"
+    assert ctrl.file_list_panel.model.index(1, 4).data() == "0"
+
+    # Status of frame_003 MUST still be "Готово" and count "0"
+    assert ctrl.file_list_panel.model.index(2, 2).data() == "Готово"
+    assert ctrl.file_list_panel.model.index(2, 4).data() == "0"
+
+    # Crucial check: on the map, BOTH frame_001 (with weed) and frame_003 (without weeds) MUST be rendered!
+    # Frame footprints (footprint_items) for georeferenced images must exist on map
+    assert len(ctrl.map_canvas._footprint_items) == 2
+    # Only frame_001 had weed points
+    assert len(ctrl.map_canvas._points_list) == 1
+
+
+
+
 

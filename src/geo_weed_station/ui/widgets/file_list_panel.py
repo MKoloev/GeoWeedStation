@@ -30,6 +30,7 @@ class FileListPanel(QWidget):
 
     file_selected = Signal(int)  # Emitted with row index when user selects an item
     process_requested = Signal()  # Emitted when user clicks 'Start Processing'
+    save_annotations_requested = Signal()  # Emitted when user clicks 'Save Annotations'
     cleared = Signal()  # Emitted when file table is cleared
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -68,6 +69,11 @@ class FileListPanel(QWidget):
         self.btn_process = QPushButton("⚡ Запустить обработку", self)
         self.btn_process.clicked.connect(self.process_requested.emit)
         btn_layout.addWidget(self.btn_process)
+
+        self.btn_save_annotations = QPushButton("💾 Сохранить разметку", self)
+        self.btn_save_annotations.setToolTip("Сохранить текущую разметку детекций в каталог снимков (annotations.json)")
+        self.btn_save_annotations.clicked.connect(self.save_annotations_requested.emit)
+        btn_layout.addWidget(self.btn_save_annotations)
 
         self.btn_clear = QPushButton("Очистить", self)
         self.btn_clear.clicked.connect(self.clear)

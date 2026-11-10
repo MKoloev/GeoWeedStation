@@ -6,11 +6,17 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtWidgets import QApplication, QFileDialog, QProgressDialog
 
 from geo_weed_station.config.settings import AppSettings
 from geo_weed_station.controllers.map_controller import MapController
+from geo_weed_station.core.annotation_io import (
+    AnnotationsMap,
+    find_annotation_file,
+    load_annotations_file,
+    save_annotations_to_folder,
+)
 from geo_weed_station.core.detector_base import BaseDetector
 from geo_weed_station.core.image_io import read_image
 from geo_weed_station.core.onnx_detector import (
@@ -29,7 +35,7 @@ from geo_weed_station.core.xmp_parser import has_xmp
 from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.mission import Waypoint
 from geo_weed_station.schemas.payload import FramePayload
-from geo_weed_station.schemas.session import FileEntry
+from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
 from geo_weed_station.ui.app_mode import AppMode
 from geo_weed_station.ui.main_window import (
     MAP_LOCKED_TEXT,
@@ -151,11 +157,13 @@ class OfflineController(QObject):
         self._window.open_image_requested.connect(self.open_image)
         self._window.open_folder_requested.connect(self.open_folder)
         self._window.open_video_requested.connect(self.open_video)
+        self._window.save_annotations_requested.connect(self.save_annotations)
         self._window.status_bar_panel.cancel_requested.connect(self.cancel)
 
         # File list panel
         self.file_list_panel.file_selected.connect(self._on_file_selected)
         self.file_list_panel.process_requested.connect(self.start_batch)
+        self.file_list_panel.save_annotations_requested.connect(self.save_annotations)
         self.file_list_panel.cleared.connect(self._on_file_list_cleared)
 
         # Filters & Model selection
@@ -211,19 +219,91 @@ class OfflineController(QObject):
         self.map_info_panel.clear_selection()
         self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
 
+        progress = QProgressDialog(self._window)
+        progress.setWindowTitle("Загрузка данных")
+        progress.setLabelText(f"Чтение {file_path.name}...")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setCancelButton(None)
+        progress.setMinimumDuration(0)
+        progress.setRange(0, 100)
+        progress.setValue(30)
+        progress.resize(360, 100)
+        progress.show()
+        QApplication.processEvents()
+
         try:
             size = file_path.stat().st_size if file_path.is_file() else 0
             has_xmp_flag = has_xmp(file_path) if file_path.is_file() else False
             entry = FileEntry(path=str(file_path), size_bytes=size, has_xmp=has_xmp_flag)
 
+            # Check for existing annotations in the same folder
+            annot_file = find_annotation_file(file_path.parent)
+            if annot_file is not None:
+                progress.setLabelText("Проверка существующей разметки...")
+                progress.setValue(60)
+                QApplication.processEvents()
+
+                dets_map = load_annotations_file(annot_file, [file_path])
+                norm_p = str(file_path)
+                dets = dets_map.get(norm_p)
+                if dets is None:
+                    try:
+                        dets = dets_map.get(str(file_path.resolve()))
+                    except Exception:
+                        pass
+                if dets is not None:
+                    self._detections_by_path[norm_p] = dets
+                    self._detections_by_path[str(file_path)] = dets
+                    entry.detections_count = len(dets)
+                    if isinstance(dets_map, AnnotationsMap):
+                        saved_st = dets_map.get_status(file_path)
+                        saved_cnt = dets_map.get_detections_count(file_path)
+                        if saved_st is not None:
+                            entry.status = saved_st
+                        else:
+                            entry.status = ProcessingStatus.DONE if entry.has_xmp else ProcessingStatus.NO_METADATA
+                        if saved_cnt is not None:
+                            entry.detections_count = saved_cnt
+                    else:
+                        entry.status = ProcessingStatus.DONE if entry.has_xmp else ProcessingStatus.NO_METADATA
+
+                    new_classes = {d.class_name for d in dets if d.class_name}
+                    if new_classes:
+                        existing = set(self.filter_panel._class_names)
+                        self.filter_panel.set_classes(sorted(existing | new_classes))
+
+            progress.setLabelText("Подготовка предпросмотра...")
+            progress.setValue(85)
+            QApplication.processEvents()
+
             self.file_list_panel.set_entries([entry])
-            self._load_entry_to_viewer(entry)
-            self._window.status_bar_panel.set_message(
-                f"Изображение {file_path.name} загружено. Нажмите «⚡ Запустить обработку» для анализа."
-            )
+            self.file_list_panel.update_status(0, entry.status)
+            if entry.detections_count is not None:
+                self.file_list_panel.update_entry_metadata(
+                    0, has_xmp=entry.has_xmp, detections_count=entry.detections_count
+                )
+
+            progress.setValue(100)
+            QApplication.processEvents()
+
+            if entry.detections_count is not None and entry.detections_count > 0:
+                self._window.status_bar_panel.set_message(
+                    f"Изображение {file_path.name} загружено. Подгружена разметка ({entry.detections_count} детекций)."
+                )
+            elif entry.status != ProcessingStatus.PENDING:
+                self._window.status_bar_panel.set_message(
+                    f"Изображение {file_path.name} загружено. Подгружен статус ({entry.status.value})."
+                )
+            else:
+                self._window.status_bar_panel.set_message(
+                    f"Изображение {file_path.name} загружено. Нажмите «⚡ Запустить обработку» для анализа."
+                )
         except Exception as exc:
             logger.exception("Failed to open image: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка открытия файла: {exc}")
+        finally:
+            progress.close()
+            QApplication.processEvents()
 
     @Slot()
     def open_folder(self) -> None:
@@ -239,20 +319,162 @@ class OfflineController(QObject):
         self._detections_by_path.clear()
         self._map_ctrl.reset()
         self.map_info_panel.clear_selection()
+
+        # Loading progress dialog giving immediate visual feedback to the user
+        progress = QProgressDialog(self._window)
+        progress.setWindowTitle("Загрузка данных")
+        progress.setLabelText(f"Сканирование каталога {folder_path.name}...")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setCancelButton(None)
+        progress.setMinimumDuration(0)
+        progress.setRange(0, 100)
+        progress.setValue(5)
+        progress.resize(420, 110)
+        progress.show()
         self._window.status_bar_panel.set_message(f"Сканирование каталога {folder_path.name}...")
+        QApplication.processEvents()
 
         try:
-            src = FolderSource(folder_path)
-            entries = src.entries()
-            self.file_list_panel.set_entries(entries)
-            self._window.status_bar_panel.set_message(f"Найдено {len(entries)} снимков в каталоге")
+            def on_scan_progress(current: int, total: int) -> None:
+                pct = 5 + int(35 * current / max(1, total))
+                progress.setValue(pct)
+                progress.setLabelText(f"Сканирование снимков: {current} из {total}...")
+                QApplication.processEvents()
 
-            if entries:
-                # Preview first file
-                self._load_entry_to_viewer(entries[0])
+            progress.setLabelText("Поиск файлов и аннотаций...")
+            progress.setValue(10)
+            QApplication.processEvents()
+
+            src = FolderSource(folder_path)
+            entries = src.entries(progress_cb=on_scan_progress)
+
+            # Auto-load annotations if an annotation file was discovered
+            if src.annotation_file is not None and src.annotations_map:
+                progress.setLabelText("Загрузка аннотаций сорняков...")
+                progress.setValue(45)
+                QApplication.processEvents()
+
+                for p_str, dets in src.annotations_map.items():
+                    norm_p = str(Path(p_str))
+                    self._detections_by_path[norm_p] = dets
+                    self._detections_by_path[p_str] = dets
+
+                # Sync classes with filter panel
+                all_classes = {d.class_name for dets in src.annotations_map.values() for d in dets if d.class_name}
+                if all_classes:
+                    existing = set(self.filter_panel._class_names)
+                    combined = sorted(existing | all_classes)
+                    if combined != self.filter_panel._class_names:
+                        self.filter_panel.set_classes(combined)
+
+                # Ingest georeferenced frames into MapEngine (without decoding full pixel buffers)
+                georef_entries = [e for e in entries if e.has_xmp]
+                total_geo_frames = len(georef_entries)
+                all_new_pts = []
+                has_ingested_frames = False
+
+                for i, entry in enumerate(georef_entries):
+                    try:
+                        payload = src.load(entry, load_pixels=False)
+                        if payload.has_georef():
+                            pts = self._map_ctrl.engine.ingest_frame(payload)
+                            all_new_pts.extend(pts)
+                            has_ingested_frames = True
+                    except Exception as err:
+                        logger.debug("Could not ingest preloaded frame: %s", err)
+
+                    if i % 3 == 0 or i == total_geo_frames - 1:
+                        pct = 45 + int(35 * (i + 1) / max(1, total_geo_frames))
+                        progress.setValue(pct)
+                        progress.setLabelText(f"Синхронизация карты: кадр {i + 1} из {total_geo_frames}...")
+                        QApplication.processEvents()
+
+                if has_ingested_frames:
+                    progress.setLabelText("Построение слоев карты...")
+                    progress.setValue(85)
+                    QApplication.processEvents()
+
+                    self.map_canvas.append_points(all_new_pts)
+                    self._map_ctrl.statistics_changed.emit(self._map_ctrl.engine.statistics())
+                    self._map_ctrl.map_locked_changed.emit(False, "")
+                    self._on_map_updated()
+
+            progress.setLabelText("Формирование списка файлов...")
+            progress.setValue(90)
+            QApplication.processEvents()
+
+            self.file_list_panel.set_entries(entries)
+
+            if src.annotation_file is not None and src.annotations_map:
+                total_dets = sum(len(self._detections_by_path.get(str(Path(e.path)), [])) for e in entries)
+                count_frames = sum(1 for e in entries if len(self._detections_by_path.get(str(Path(e.path)), [])) > 0)
+                if total_dets > 0:
+                    self._window.status_bar_panel.set_message(
+                        f"Каталог {folder_path.name} загружен ({len(entries)} снимков). Подгружена разметка из {src.annotation_file.name} ({total_dets} детекций в {count_frames} кадрах)."
+                    )
+                else:
+                    self._window.status_bar_panel.set_message(
+                        f"Каталог {folder_path.name} загружен ({len(entries)} снимков). Подгружена разметка из {src.annotation_file.name} (детекций не обнаружено)."
+                    )
+            else:
+                self._window.status_bar_panel.set_message(f"Найдено {len(entries)} снимков в каталоге")
+
+            progress.setValue(100)
+            QApplication.processEvents()
+
         except Exception as exc:
             logger.exception("Failed to open folder: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка открытия каталога: {exc}")
+        finally:
+            progress.close()
+            QApplication.processEvents()
+
+    @Slot()
+    def save_annotations(self) -> None:
+        """Save current in-memory detections into annotations.json in the image directory."""
+        entries = self.file_list_panel.model.entries
+        has_processed = any(
+            e.status in (ProcessingStatus.DONE, ProcessingStatus.NO_METADATA, ProcessingStatus.ERROR)
+            for e in entries
+        ) or bool(self._detections_by_path)
+
+        if not has_processed:
+            msg = "Нет разметки для сохранения. Сначала запустите обработку."
+            logger.info(msg)
+            self._window.status_bar_panel.set_message(msg)
+            return
+
+        folder = self._current_source_folder
+        if folder is None or not folder.is_dir():
+            if entries and Path(entries[0].path).is_file():
+                folder = Path(entries[0].path).parent
+            else:
+                msg = "Каталог снимков не определен. Сохранение отменено."
+                self._window.status_bar_panel.set_message(msg)
+                return
+
+        unique_paths = {str(Path(e.path)) for e in entries} if entries else set(self._detections_by_path.keys())
+        total_unique_dets = sum(len(self._detections_by_path.get(p, [])) for p in unique_paths)
+
+        try:
+            saved_path = save_annotations_to_folder(
+                folder=folder,
+                detections_by_path=self._detections_by_path,
+                entries=entries,
+            )
+            frames_with_dets = sum(1 for p in unique_paths if self._detections_by_path.get(p))
+            processed_count = sum(
+                1 for e in entries if e.status in (ProcessingStatus.DONE, ProcessingStatus.NO_METADATA)
+            )
+            if total_unique_dets > 0:
+                success_msg = f"Разметка успешно сохранена в {saved_path.name} ({total_unique_dets} детекций в {frames_with_dets} кадрах)"
+            else:
+                success_msg = f"Результаты обработки успешно сохранены в {saved_path.name} (обработано {processed_count} кадров, сорняков не обнаружено)"
+            logger.info(success_msg)
+            self._window.status_bar_panel.set_message(success_msg)
+        except Exception as exc:
+            logger.exception("Failed to save annotations: %s", exc)
+            self._window.status_bar_panel.set_message(f"Ошибка сохранения разметки: {exc}")
 
     @Slot()
     def open_video(self) -> None:

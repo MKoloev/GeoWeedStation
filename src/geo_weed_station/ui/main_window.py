@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
     open_image_requested = Signal()
     open_folder_requested = Signal()
     open_video_requested = Signal()
+    save_annotations_requested = Signal()
     closing = Signal()
 
     SHUTDOWN_TIMEOUT_MS = 5000
@@ -119,12 +120,15 @@ class MainWindow(QMainWindow):
         self.action_open_image = QAction(icon("image"), "Открыть изображение…", self)
         self.action_open_folder = QAction(icon("folder"), "Открыть папку…", self)
         self.action_open_video = QAction(icon("video"), "Открыть видео…", self)
+        self.action_save_annotations = QAction("Сохранить разметку", self)
+        self.action_save_annotations.setShortcut("Ctrl+S")
         self.action_export = QAction(icon("export"), "Экспорт…", self)
         self.action_settings = QAction(icon("settings"), "Настройки…", self)
         self.action_quit = QAction("Выход", self)
         self.action_open_image.triggered.connect(self.open_image_requested)
         self.action_open_folder.triggered.connect(self.open_folder_requested)
         self.action_open_video.triggered.connect(self.open_video_requested)
+        self.action_save_annotations.triggered.connect(self.save_annotations_requested)
         self.action_export.triggered.connect(self.request_export)
         self.action_settings.triggered.connect(self.request_settings)
         self.action_quit.triggered.connect(self.close)
@@ -139,18 +143,26 @@ class MainWindow(QMainWindow):
         bar.addAction(self.action_open_image)
         bar.addAction(self.action_open_folder)
         bar.addAction(self.action_open_video)
+        bar.addAction(self.action_save_annotations)
         bar.addSeparator()
         bar.addAction(self.action_export)
         bar.addAction(self.action_settings)
         self.addToolBar(Qt.TopToolBarArea, bar)
         self._toolbar = bar
-        self._offline_actions = (self.action_open_image, self.action_open_folder, self.action_open_video)
+        self._offline_actions = (
+            self.action_open_image,
+            self.action_open_folder,
+            self.action_open_video,
+            self.action_save_annotations,
+        )
 
     def _build_menu(self) -> None:
         file_menu = self.menuBar().addMenu("Файл")
         file_menu.addAction(self.action_open_image)
         file_menu.addAction(self.action_open_folder)
         file_menu.addAction(self.action_open_video)
+        file_menu.addSeparator()
+        file_menu.addAction(self.action_save_annotations)
         file_menu.addSeparator()
         file_menu.addAction(self.action_export)
         file_menu.addSeparator()

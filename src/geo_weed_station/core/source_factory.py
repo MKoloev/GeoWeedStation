@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
 import cv2
 
+from geo_weed_station.core.annotation_io import AnnotationsMap, find_annotation_file, load_annotations_file
 from geo_weed_station.core.exceptions import ImageReadError
-from geo_weed_station.core.image_io import read_image
-from geo_weed_station.core.xmp_parser import build_frame_payload
+from geo_weed_station.core.image_io import get_image_size, read_image
+from geo_weed_station.core.xmp_parser import build_frame_payload, has_xmp
+from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.onboard_api import SummaryDetections, summary_to_frame_payloads
 from geo_weed_station.schemas.payload import FramePayload
-from geo_weed_station.schemas.session import FileEntry
+from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
 
 IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff"})
 VIDEO_EXTENSIONS = frozenset({".mp4", ".avi", ".mov", ".mkv"})
@@ -48,12 +51,20 @@ def _entry_for(path: Path) -> FileEntry:
     return FileEntry(path=str(path), size_bytes=size)
 
 
-def load_image_payload(path: Path) -> FramePayload:
-    """Decode an image and build a payload using only embedded XMP metadata."""
-    image = read_image(path)
-    h, w = image.shape[:2]
-    payload = build_frame_payload(path, (w, h))
-    return payload.model_copy(update={"image": image})
+def load_image_payload(path: Path, load_pixels: bool = True) -> FramePayload:
+    """Decode an image and build a payload using only embedded XMP metadata.
+    
+    If load_pixels is False, only extracts dimensions and XMP metadata without decoding pixels.
+    """
+    path = Path(path)
+    if load_pixels:
+        image = read_image(path)
+        h, w = image.shape[:2]
+        payload = build_frame_payload(path, (w, h))
+        return payload.model_copy(update={"image": image})
+    else:
+        sz = get_image_size(path)
+        return build_frame_payload(path, sz)
 
 
 class ImageSource:
@@ -67,23 +78,91 @@ class ImageSource:
     def entries(self) -> list[FileEntry]:
         return [_entry_for(self.path)]
 
-    def load(self, entry: FileEntry) -> FramePayload:
-        return load_image_payload(Path(entry.path))
+    def load(self, entry: FileEntry, load_pixels: bool = True) -> FramePayload:
+        return load_image_payload(Path(entry.path), load_pixels=load_pixels)
 
 
 class FolderSource:
-    """Recursive folder of images."""
+    """Recursive folder of images with optional preloaded annotations."""
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         if not self.path.is_dir():
             raise NotADirectoryError(f"Folder not found: {self.path}")
+        self._image_paths: list[Path] = scan_images(self.path)
+        self._annot_file: Path | None = find_annotation_file(self.path)
+        self._annotations_map: dict[str, list[DetectedWeed]] = {}
+        if self._annot_file is not None:
+            self._annotations_map = load_annotations_file(self._annot_file, self._image_paths)
 
-    def entries(self) -> list[FileEntry]:
-        return [_entry_for(p) for p in scan_images(self.path)]
+    @property
+    def annotation_file(self) -> Path | None:
+        """Path to discovered annotation file if present."""
+        return self._annot_file
 
-    def load(self, entry: FileEntry) -> FramePayload:
-        return load_image_payload(Path(entry.path))
+    @property
+    def annotations_map(self) -> dict[str, list[DetectedWeed]]:
+        """Dictionary of preloaded detections keyed by file path."""
+        return self._annotations_map
+
+    def entries(self, progress_cb: Callable[[int, int], None] | None = None) -> list[FileEntry]:
+        results: list[FileEntry] = []
+        total = len(self._image_paths)
+        for i, p in enumerate(self._image_paths):
+            if progress_cb is not None and (i % 5 == 0 or i == total - 1):
+                progress_cb(i + 1, total)
+
+            size = p.stat().st_size if p.is_file() else 0
+            has_xmp_val: bool | None = None
+            saved_status: ProcessingStatus | None = None
+            saved_count: int | None = None
+
+            if isinstance(self._annotations_map, AnnotationsMap):
+                saved_status = self._annotations_map.get_status(p)
+                saved_count = self._annotations_map.get_detections_count(p)
+                has_xmp_val = self._annotations_map.get_has_xmp(p)
+
+            if has_xmp_val is None:
+                has_xmp_val = has_xmp(p)
+
+            entry = FileEntry(path=str(p), size_bytes=size, has_xmp=has_xmp_val)
+
+            norm_str = str(p)
+            dets = self._annotations_map.get(norm_str)
+            if dets is None:
+                try:
+                    dets = self._annotations_map.get(str(p.resolve()))
+                except Exception:
+                    pass
+
+            if saved_status is not None:
+                entry.status = saved_status
+                if saved_status in (ProcessingStatus.PENDING, ProcessingStatus.ERROR) and not dets:
+                    entry.detections_count = None
+                elif saved_count is not None:
+                    entry.detections_count = saved_count
+                elif dets is not None:
+                    entry.detections_count = len(dets)
+            elif dets is not None:
+                entry.status = ProcessingStatus.DONE if entry.has_xmp else ProcessingStatus.NO_METADATA
+                entry.detections_count = len(dets)
+
+            results.append(entry)
+        return results
+
+    def load(self, entry: FileEntry, load_pixels: bool = True) -> FramePayload:
+        p = Path(entry.path)
+        payload = load_image_payload(p, load_pixels=load_pixels)
+        norm_str = str(p)
+        dets = self._annotations_map.get(norm_str)
+        if dets is None:
+            try:
+                dets = self._annotations_map.get(str(p.resolve()))
+            except Exception:
+                pass
+        if dets is not None:
+            return payload.model_copy(update={"detections": list(dets)})
+        return payload
 
 
 class VideoSource:
