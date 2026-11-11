@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import posixpath
 import re
+import stat
 import time
 from pathlib import Path
 from typing import Any
@@ -72,6 +74,7 @@ class SshMissionWorker(ManagedWorker):
     mission_started = Signal()
     mission_finished = Signal(bool, str)  # success, message
     summary_downloaded = Signal(str)  # local summary.json path
+    run_downloaded = Signal(str)  # local run directory path
 
     def __init__(
         self,
@@ -255,8 +258,85 @@ class SshMissionWorker(ManagedWorker):
             self._remote_summary_path = sum_match.group(1).strip()
             logger.info("Detected remote summary path: %s", self._remote_summary_path)
 
+    def _sftp_get_safe(self, sftp: Any, remote_path: str, local_path: Path) -> bool:
+        """Download a single file atomically via a `.part` temp file, never leaving empty targets."""
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        part_path = local_path.with_name(f"{local_path.name}.part")
+        try:
+            sftp.get(remote_path, str(part_path))
+            if part_path.exists():
+                part_path.replace(local_path)
+            return True
+        except OSError as exc:
+            logger.debug("Could not download %s: %s", remote_path, exc)
+            try:
+                part_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return False
+
+    def _download_remote_dir(
+        self,
+        sftp: Any,
+        remote_dir: str,
+        local_dir: Path,
+        *,
+        _depth: int = 0,
+        _max_depth: int = 5,
+    ) -> dict[str, int]:
+        """Recursively download remote run artifacts (images, annotations, summaries)."""
+        counts = {"files": 0, "images": 0, "annotations": 0}
+        if _depth > _max_depth:
+            return counts
+
+        try:
+            entries = sftp.listdir_attr(remote_dir)
+        except (OSError, AttributeError, NotImplementedError) as exc:
+            logger.debug("Could not list remote dir attrs %s: %s", remote_dir, exc)
+            return counts
+
+        if not isinstance(entries, (list, tuple)):
+            try:
+                entries = list(entries)
+            except TypeError:
+                return counts
+
+        local_dir.mkdir(parents=True, exist_ok=True)
+        for attr in entries:
+            name = getattr(attr, "filename", None)
+            if not isinstance(name, str) or not name or name in (".", ".."):
+                continue
+            if "/" in name or "\\" in name:
+                continue
+            if name.endswith(".tmp") or name.endswith(".part"):
+                continue
+
+            remote_child = posixpath.join(remote_dir, name)
+            local_child = local_dir / name
+            st_mode = getattr(attr, "st_mode", None)
+            if isinstance(st_mode, int) and stat.S_ISDIR(st_mode):
+                sub = self._download_remote_dir(
+                    sftp,
+                    remote_child,
+                    local_child,
+                    _depth=_depth + 1,
+                    _max_depth=_max_depth,
+                )
+                counts["files"] += sub["files"]
+                counts["images"] += sub["images"]
+                counts["annotations"] += sub["annotations"]
+            else:
+                if self._sftp_get_safe(sftp, remote_child, local_child):
+                    counts["files"] += 1
+                    lower = name.lower()
+                    if lower.endswith((".jpg", ".jpeg", ".png")):
+                        counts["images"] += 1
+                    elif lower == "annotations.json":
+                        counts["annotations"] += 1
+        return counts
+
     def _download_artifacts_sftp(self, client: Any) -> None:
-        """Download summary.json and manifest.json from drone SBC via SFTP."""
+        """Download full mission run directory (images, annotations.json, summary.json, manifest.json) via SFTP."""
         try:
             self.log_received.emit("📥 Проверка и загрузка артефактов полета (SFTP)...")
             sftp = client.open_sftp()
@@ -266,48 +346,68 @@ class SshMissionWorker(ManagedWorker):
             return
 
         try:
-            remote_summary = self._remote_summary_path
-            # If not explicitly captured, check remote_run_dir
-            if remote_summary is None and self._remote_run_dir is not None:
-                remote_summary = f"{self._remote_run_dir}/summary.json"
-            if remote_summary is not None:
-                remote_summary = resolve_remote_path(remote_summary, self.command)
-
-            if remote_summary is None:
-                # Try finding the latest run directory on remote
-                remote_base = "/home/orangepi/tsu/CollectOnboardImage/runs"
+            remote_run_dir: str | None = None
+            if self._remote_run_dir is not None:
+                remote_run_dir = resolve_remote_path(self._remote_run_dir, self.command)
+            elif self._remote_summary_path is not None:
+                remote_summary = resolve_remote_path(self._remote_summary_path, self.command)
+                remote_run_dir = posixpath.dirname(remote_summary)
+            else:
+                remote_base = resolve_remote_path("runs", self.command)
                 try:
                     entries = sftp.listdir(remote_base)
-                    run_dirs = sorted([e for e in entries if e.startswith("run_")])
+                    run_dirs = sorted([e for e in entries if isinstance(e, str) and e.startswith("run_")])
                     if run_dirs:
-                        remote_summary = f"{remote_base}/{run_dirs[-1]}/summary.json"
+                        remote_run_dir = posixpath.join(remote_base, run_dirs[-1])
                 except OSError as err:
                     logger.debug("Could not list remote runs: %s", err)
 
-            if remote_summary is None:
-                self.log_received.emit("ℹ️ Артефакты summary.json на борту не найдены")
+            if not remote_run_dir:
+                self.log_received.emit("ℹ️ Каталог миссии на борту не найден")
                 return
 
-            # Prepare local destination
+            run_name = posixpath.basename(remote_run_dir.rstrip("/"))
+            if not run_name or run_name in (".", ".."):
+                self.log_received.emit(f"⚠️ Некорректный путь каталога миссии: {remote_run_dir}")
+                return
+
             assert self.local_runs_dir is not None
-            run_name = Path(remote_summary).parent.name
             local_target_dir = self.local_runs_dir / run_name
             local_target_dir.mkdir(parents=True, exist_ok=True)
             local_summary_file = local_target_dir / "summary.json"
+            local_manifest_file = local_target_dir / "manifest.json"
 
-            self.log_received.emit(f"📥 Скачивание: {remote_summary} -> {local_summary_file}")
-            sftp.get(remote_summary, str(local_summary_file))
+            self.log_received.emit(f"📥 Скачивание: {remote_run_dir} -> {local_target_dir}")
+            stats = self._download_remote_dir(sftp, remote_run_dir, local_target_dir)
 
-            # Also attempt manifest.json
-            remote_manifest = f"{Path(remote_summary).parent}/manifest.json"
-            local_manifest = local_target_dir / "manifest.json"
-            try:
-                sftp.get(remote_manifest, str(local_manifest))
-            except OSError as err:
-                logger.debug("Could not get manifest: %s", err)
+            summary_ok = local_summary_file.exists()
+            if not summary_ok:
+                remote_summary = posixpath.join(remote_run_dir, "summary.json")
+                summary_ok = self._sftp_get_safe(sftp, remote_summary, local_summary_file)
+                if summary_ok:
+                    stats["files"] += 1
 
-            self.log_received.emit(f"✅ Артефакты миссии успешно сохранены: {local_summary_file}")
-            self.summary_downloaded.emit(str(local_summary_file))
+            if not local_manifest_file.exists():
+                remote_manifest = posixpath.join(remote_run_dir, "manifest.json")
+                if self._sftp_get_safe(sftp, remote_manifest, local_manifest_file):
+                    stats["files"] += 1
+
+            if stats["files"] == 0 and not summary_ok:
+                self.log_received.emit("⚠️ Артефакты миссии на борту не найдены")
+                return
+
+            present_variants = [
+                v for v in ("local_aruco", "preserve_original") if (local_target_dir / v).is_dir()
+            ]
+            variants_note = f", папки: {', '.join(present_variants)}" if present_variants else ""
+            self.log_received.emit(
+                f"✅ Артефакты миссии сохранены в {local_target_dir} "
+                f"(файлов: {stats['files']}, снимков: {stats['images']}, "
+                f"аннотаций: {stats['annotations']}{variants_note})"
+            )
+            self.run_downloaded.emit(str(local_target_dir))
+            if summary_ok:
+                self.summary_downloaded.emit(str(local_summary_file))
         except OSError as exc:
             logger.warning("Failed to download artifacts via SFTP: %s", exc)
             self.log_received.emit(f"⚠️ Ошибка загрузки артефактов SFTP: {exc}")

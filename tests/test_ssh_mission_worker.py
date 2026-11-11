@@ -201,3 +201,135 @@ def test_default_ssh_command_has_optimal_detector_params():
     assert "--iou-thresh 0.25" in DEFAULT_SSH_COMMAND
     assert "--conf-thresh 0.6" in DEFAULT_SSH_COMMAND
     assert "--containment-thresh 0.7" in DEFAULT_SSH_COMMAND
+
+
+def test_ssh_mission_worker_downloads_full_run_tree_sftp(qtbot, tmp_path: Path):
+    """Verify SshMissionWorker recursively downloads local_aruco and preserve_original artifacts."""
+    import stat
+    from types import SimpleNamespace
+
+    remote_root = "/home/orangepi/tsu/CollectOnboardImage/runs/run_20261111_120000"
+    remote_fs: dict[str, bytes | list[SimpleNamespace]] = {
+        remote_root: [
+            SimpleNamespace(filename=".", st_mode=stat.S_IFDIR),
+            SimpleNamespace(filename="..", st_mode=stat.S_IFDIR),
+            SimpleNamespace(filename="summary.json", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="summary.json.tmp", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="manifest.json", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="local_aruco", st_mode=stat.S_IFDIR),
+            SimpleNamespace(filename="preserve_original", st_mode=stat.S_IFDIR),
+        ],
+        f"{remote_root}/local_aruco": [
+            SimpleNamespace(filename="capture_000.jpg", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="annotations.json", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="summary.json", st_mode=stat.S_IFREG),
+        ],
+        f"{remote_root}/preserve_original": [
+            SimpleNamespace(filename="capture_000.jpg", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="annotations.json", st_mode=stat.S_IFREG),
+            SimpleNamespace(filename="summary.json", st_mode=stat.S_IFREG),
+        ],
+        f"{remote_root}/summary.json": b'{"run_id":"run_20261111_120000","coordinate_system":"aruco_local","detections_count":0,"items":[]}',
+        f"{remote_root}/manifest.json": b'{"status":"completed"}',
+        f"{remote_root}/local_aruco/capture_000.jpg": b"LOCAL_JPG",
+        f"{remote_root}/local_aruco/annotations.json": b'{"format":"geoweed_annotations","frames":{}}',
+        f"{remote_root}/local_aruco/summary.json": b'{"run_id":"run_20261111_120000","coordinate_system":"aruco_local","detections_count":0,"items":[]}',
+        f"{remote_root}/preserve_original/capture_000.jpg": b"ORIG_JPG",
+        f"{remote_root}/preserve_original/annotations.json": b'{"format":"geoweed_annotations","frames":{}}',
+        f"{remote_root}/preserve_original/summary.json": b'{"run_id":"run_20261111_120000","coordinate_system":"wgs84","detections_count":0,"items":[]}',
+    }
+
+    mock_sftp = MagicMock()
+    mock_sftp.listdir_attr.side_effect = lambda rdir: remote_fs[rdir]
+
+    def _fake_get(remote_path: str, local_path: str) -> None:
+        if remote_path not in remote_fs or not isinstance(remote_fs[remote_path], bytes):
+            raise FileNotFoundError(remote_path)
+        Path(local_path).write_bytes(remote_fs[remote_path])  # type: ignore[arg-type]
+
+    mock_sftp.get.side_effect = _fake_get
+
+    output_lines = [
+        f"Created mission run directory: {remote_root}\n",
+        f"Saved summary: {remote_root}/summary.json\n",
+    ]
+    mock_channel = DummyChannel(output_lines, exit_code=0)
+    mock_transport = MagicMock()
+    mock_transport.open_session.return_value = mock_channel
+
+    mock_client = MagicMock()
+    mock_client.get_transport.return_value = mock_transport
+    mock_client.open_sftp.return_value = mock_sftp
+
+    worker = SshMissionWorker(host="10.42.0.1", local_runs_dir=tmp_path)
+    downloaded_summaries: list[str] = []
+    downloaded_runs: list[str] = []
+    finished_results: list[tuple[bool, str]] = []
+    worker.summary_downloaded.connect(downloaded_summaries.append)
+    worker.run_downloaded.connect(downloaded_runs.append)
+    worker.mission_finished.connect(lambda ok, msg: finished_results.append((ok, msg)))
+
+    with patch("geo_weed_station.workers.ssh_mission_worker.paramiko.SSHClient", return_value=mock_client):
+        thread = start_in_thread(worker, "test_ssh_recursive_sftp")
+        try:
+            qtbot.waitUntil(lambda: len(finished_results) >= 1, timeout=3000)
+        finally:
+            worker.request_stop()
+            thread.quit()
+            thread.wait(3000)
+
+    local_run = tmp_path / "run_20261111_120000"
+    assert finished_results == [(True, "Миссия успешно завершена (код 0)")]
+    assert downloaded_runs == [str(local_run)]
+    assert downloaded_summaries == [str(local_run / "summary.json")]
+
+    assert (local_run / "summary.json").read_bytes() == remote_fs[f"{remote_root}/summary.json"]
+    assert (local_run / "manifest.json").read_bytes() == remote_fs[f"{remote_root}/manifest.json"]
+    assert not (local_run / "summary.json.tmp").exists()
+    assert not list(local_run.rglob("*.part"))
+
+    assert (local_run / "local_aruco" / "capture_000.jpg").read_bytes() == b"LOCAL_JPG"
+    assert (local_run / "local_aruco" / "annotations.json").is_file()
+    assert (local_run / "local_aruco" / "summary.json").is_file()
+    assert (local_run / "preserve_original" / "capture_000.jpg").read_bytes() == b"ORIG_JPG"
+    assert (local_run / "preserve_original" / "annotations.json").is_file()
+    assert (local_run / "preserve_original" / "summary.json").is_file()
+
+
+def test_ssh_mission_worker_sftp_missing_summary_no_empty_file(qtbot, tmp_path: Path):
+    """Ensure failed SFTP summary.json download does not leave an empty 0-byte local file."""
+    remote_root = "/home/orangepi/tsu/CollectOnboardImage/runs/run_20261111_130000"
+
+    mock_sftp = MagicMock()
+    mock_sftp.listdir_attr.return_value = []
+    mock_sftp.get.side_effect = FileNotFoundError("No such remote file")
+
+    mock_channel = DummyChannel(
+        [f"Created mission run directory: {remote_root}\n"],
+        exit_code=1,
+    )
+    mock_transport = MagicMock()
+    mock_transport.open_session.return_value = mock_channel
+    mock_client = MagicMock()
+    mock_client.get_transport.return_value = mock_transport
+    mock_client.open_sftp.return_value = mock_sftp
+
+    worker = SshMissionWorker(host="10.42.0.1", local_runs_dir=tmp_path)
+    downloaded_summaries: list[str] = []
+    finished_results: list[tuple[bool, str]] = []
+    worker.summary_downloaded.connect(downloaded_summaries.append)
+    worker.mission_finished.connect(lambda ok, msg: finished_results.append((ok, msg)))
+
+    with patch("geo_weed_station.workers.ssh_mission_worker.paramiko.SSHClient", return_value=mock_client):
+        thread = start_in_thread(worker, "test_ssh_missing_summary")
+        try:
+            qtbot.waitUntil(lambda: len(finished_results) >= 1, timeout=3000)
+        finally:
+            worker.request_stop()
+            thread.quit()
+            thread.wait(3000)
+
+    local_run = tmp_path / "run_20261111_130000"
+    assert downloaded_summaries == []
+    assert not (local_run / "summary.json").exists()
+    assert not (local_run / "summary.json.part").exists()
