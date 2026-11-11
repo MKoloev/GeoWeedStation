@@ -237,6 +237,40 @@ def test_offline_controller_single_image_pipeline_processes_on_button(offline_se
     assert map_ctrl.engine.statistics().total_weeds == 1
 
 
+def test_offline_controller_open_image_filter_and_load(offline_setup, qtbot, monkeypatch):
+    import cv2
+    import numpy as np
+    from PySide6.QtWidgets import QFileDialog
+
+    ctrl, map_ctrl, win, tmp_path = offline_setup
+    qtbot.addWidget(win)
+
+    img_jpg = tmp_path / "test_frame.jpg"
+    arr = np.zeros((100, 100, 3), dtype=np.uint8)
+    cv2.imwrite(str(img_jpg), arr)
+
+    captured_filters = []
+
+    def mock_get_open_file(parent, caption, start_dir, filter_str):
+        captured_filters.append(filter_str)
+        return str(img_jpg), filter_str
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", mock_get_open_file)
+
+    ctrl.open_image()
+
+    assert len(captured_filters) == 1
+    f_str = captured_filters[0]
+    assert "*.png" in f_str
+    assert "*.jpg" in f_str
+    assert "*.JPG" in f_str
+    assert "*.PNG" in f_str
+    assert "PNG" in f_str
+    assert "JPEG" in f_str or "JPG" in f_str
+    assert len(ctrl.file_list_panel.model.entries) == 1
+    assert ctrl.file_list_panel.model.entries[0].path == str(img_jpg)
+
+
 def test_offline_controller_open_video_and_reopen(offline_setup, qtbot, monkeypatch):
     from PySide6.QtWidgets import QFileDialog
     from tests.helpers.make_media import make_mp4

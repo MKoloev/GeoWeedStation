@@ -231,9 +231,15 @@ class OfflineController(QObject):
     @Slot()
     def open_image(self) -> None:
         """Open a single image file, populate file list panel and preview without auto-inference."""
-        exts = " ".join(f"*{e}" for e in IMAGE_EXTENSIONS)
+        filters = (
+            "Изображения (*.png *.jpg *.jpeg *.tif *.tiff *.PNG *.JPG *.JPEG *.TIF *.TIFF);;"
+            "PNG (*.png *.PNG);;"
+            "JPEG / JPG (*.jpg *.jpeg *.JPG *.JPEG);;"
+            "TIFF (*.tif *.tiff *.TIF *.TIFF);;"
+            "Все файлы (*.*)"
+        )
         path, _ = QFileDialog.getOpenFileName(
-            self._window, "Открыть изображение", str(self._settings.workdir), f"Images ({exts})"
+            self._window, "Открыть изображение", str(self._settings.workdir), filters
         )
         if not path:
             return
