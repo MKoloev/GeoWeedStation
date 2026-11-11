@@ -540,34 +540,112 @@ class MapCanvas(QGraphicsView):
         self._heatmap_group.addToGroup(self._heatmap_item)
 
         # Draw full coordinate/cell grid in grid layer
+        self._draw_grid_overlay(origin_x, origin_y, rows, cols, sx, sy, grid.cell_size_m)
+
+    def _draw_grid_overlay(
+        self,
+        origin_x: float,
+        origin_y: float,
+        rows: int,
+        cols: int,
+        sx: float,
+        sy: float,
+        cell_size_m: float,
+    ) -> None:
+        """Render coordinate lines, prominent origin axes, and meter labels onto grid layer."""
+        for it in list(self._grid_lines_group.childItems()):
+            self._scene.removeItem(it)
+
         bw = cols * sx
         bh = rows * sy
+        top_scene_y = -(origin_y + rows * sy)
+        bottom_scene_y = top_scene_y + bh
 
+        # 1. Base cell lines
         grid_path = QPainterPath()
-        # Vertical cell boundary lines
         for c in range(cols + 1):
             gx = origin_x + c * sx
             grid_path.moveTo(gx, top_scene_y)
-            grid_path.lineTo(gx, top_scene_y + bh)
+            grid_path.lineTo(gx, bottom_scene_y)
 
-        # Horizontal cell boundary lines
         for r in range(rows + 1):
             gy = top_scene_y + r * sy
             grid_path.moveTo(origin_x, gy)
             grid_path.lineTo(origin_x + bw, gy)
 
         grid_item = QGraphicsPathItem(grid_path)
-        grid_pen = QPen(QColor(180, 200, 220, 110), 1.0, Qt.PenStyle.SolidLine)
+        grid_pen = QPen(QColor(180, 200, 220, 90), 1.0, Qt.PenStyle.SolidLine)
         grid_pen.setCosmetic(True)  # Keeps constant thin 1px size regardless of zoom
         grid_item.setPen(grid_pen)
         self._grid_lines_group.addToGroup(grid_item)
 
-        # Outer survey boundary accent
+        # 2. Outer survey boundary accent
         border_rect = QGraphicsRectItem(origin_x, top_scene_y, bw, bh)
         b_pen = QPen(QColor(80, 160, 240, 180), 1.0, Qt.PenStyle.DashLine)
         b_pen.setCosmetic(True)
         border_rect.setPen(b_pen)
         self._grid_lines_group.addToGroup(border_rect)
+
+        # 3. Metric axis labels with constant screen font
+        max_span = max(bw, bh)
+        if max_span <= 6.0:
+            step_m = 0.5
+        elif max_span <= 20.0:
+            step_m = 1.0
+        elif max_span <= 50.0:
+            step_m = 2.0
+        else:
+            step_m = 5.0
+
+        label_font = QFont("sans-serif", 8)
+        text_brush = QBrush(QColor(220, 235, 255, 220))
+
+        # X-axis meter marks along the bottom
+        for c in range(cols + 1):
+            gx = origin_x + c * sx
+            rem = abs(gx) % step_m
+            is_step = (rem < 1e-3) or (abs(rem - step_m) < 1e-3) or (c == 0) or (c == cols)
+            if is_step:
+                lbl_text = f"{gx:+.1f} м" if abs(gx) > 0.05 else "0 м"
+                txt_item = QGraphicsSimpleTextItem(lbl_text)
+                txt_item.setFont(label_font)
+                txt_item.setBrush(text_brush)
+                txt_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+                txt_item.setPos(gx, bottom_scene_y + 0.05)
+                self._grid_lines_group.addToGroup(txt_item)
+
+        # Y-axis meter marks along the left
+        for r in range(rows + 1):
+            gy = top_scene_y + r * sy
+            world_y = -gy
+            rem = abs(world_y) % step_m
+            is_step = (rem < 1e-3) or (abs(rem - step_m) < 1e-3) or (r == 0) or (r == rows)
+            if is_step:
+                lbl_text = f"{world_y:+.1f} м" if abs(world_y) > 0.05 else "0 м"
+                txt_item = QGraphicsSimpleTextItem(lbl_text)
+                txt_item.setFont(label_font)
+                txt_item.setBrush(text_brush)
+                txt_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+                txt_item.setPos(origin_x - (sx * 0.3 if sx > 1 else 0.25), gy - 0.05)
+                self._grid_lines_group.addToGroup(txt_item)
+
+        # 5. Header / North compass indicator at top-left
+        header_text = f"↑ Север (Y+)  |  Шаг сетки: {cell_size_m:.1f} м"
+        header_item = QGraphicsSimpleTextItem(header_text)
+        header_item.setFont(QFont("sans-serif", 8, QFont.Weight.Bold))
+        header_item.setBrush(QBrush(QColor(90, 210, 255, 230)))
+        header_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        header_item.setPos(origin_x, top_scene_y - 0.2)
+        self._grid_lines_group.addToGroup(header_item)
+
+        # 6. Origin badge
+        if origin_x <= 0.0 <= origin_x + bw and origin_y <= 0.0 <= (origin_y + bh):
+            origin_badge = QGraphicsSimpleTextItem("⦿ (0, 0)")
+            origin_badge.setFont(QFont("sans-serif", 8, QFont.Weight.Bold))
+            origin_badge.setBrush(QBrush(QColor(70, 230, 130, 240)))
+            origin_badge.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+            origin_badge.setPos(0.04, -0.04)
+            self._grid_lines_group.addToGroup(origin_badge)
 
     @Slot(int)
     def set_heatmap_opacity(self, percent: int) -> None:

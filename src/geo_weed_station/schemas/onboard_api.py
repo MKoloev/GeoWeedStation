@@ -95,6 +95,8 @@ class SummaryDetection(BaseModel):
     confidence: float
     bbox_px: list[int] = Field(..., min_length=4, max_length=4, description="[x1, y1, x2, y2] in pixels")
     target_local_coords: SummaryTargetCoords | None = None
+    stage_name: str | None = None
+    class_prob: float | None = None
 
 
 class SummaryItem(BaseModel):

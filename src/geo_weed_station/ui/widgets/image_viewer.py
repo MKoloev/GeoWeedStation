@@ -95,6 +95,8 @@ class DetectionGraphicsItem(QGraphicsRectItem):
         label_parts: list[str] = []
         if state.show_labels:
             label_parts.append(self.weed.class_name)
+            if self.weed.stage_name:
+                label_parts.append(f"[{self.weed.stage_name}]")
         if state.show_confidence:
             label_parts.append(f"{self.weed.confidence:.2f}")
 

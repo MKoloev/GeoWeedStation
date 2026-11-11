@@ -21,6 +21,73 @@ from geo_weed_station.schemas.entities import BBox, DetectedWeed
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# TAXONOMIES AND CLASSIFICATION DICTIONARIES (matching pipeline_orange_pi.py & MODELS.md)
+# =============================================================================
+
+C07_CATEGORIES = [
+    "background",
+    "Осот, Бодяк, Латук",
+    "Вьюнок",
+    "Щирица (виды)",
+    "Маревые (Марь, Лебеда, Кохия)",
+    "Канатник, просвирник, гибискус",
+    "Крестоцветные (Капустные)",
+    "Горец (виды)",
+    "Злаковые",
+    "Полынь, Ромашка",
+    "Гвоздичные",
+]
+
+C07_CATEGORIES_EN = [
+    "Background",
+    "Osot, Bodyak, Latuk",
+    "Vyunok (Convolvulus)",
+    "Shchiritsa (Amaranthus)",
+    "Marevye (Chenopodiaceae)",
+    "Kanatnik, Malva",
+    "Krestotsvetnye (Brassicaceae)",
+    "Gorets (Polygonum)",
+    "Zlakovye (Poaceae)",
+    "Polyn, Romashka",
+    "Gvozdichnye (Caryophyllaceae)",
+]
+
+C07_STAGES = [
+    "всходы",
+    "2-4 листа",
+    "взрослое растение",
+    "переросшие",
+    "не определена",
+]
+
+C06_TAXONOMY: dict[int, tuple[str, str, str]] = {
+    0: ("S000", "Фон / Не растение", "Background"),
+    1: ("S001", "Кукуруза", "Zea mays"),
+    2: ("S002", "Плевел жесткий", "Lolium rigidum"),
+    3: ("S003", "Гумай", "Sorghum halepense"),
+    4: ("S004", "Овсюг обыкновенный", "Avena fatua"),
+    5: ("S005", "Ячмень обыкновенный", "Hordeum vulgare"),
+    6: ("S006", "Лебеда раскидистая", "Atriplex patula"),
+    7: ("S007", "Марь белая", "Chenopodium album"),
+    8: ("S008", "Солянка русская (курай)", "Salsola kali"),
+    9: ("S009", "Свёкла обыкновенная", "Beta vulgaris"),
+    10: ("S010", "Ромашка пахучая", "Matricaria discoidea"),
+    11: ("S011", "Татарник колючий", "Onopordum acanthium"),
+    12: ("S012", "Расторопша пятнистая", "Silybum marianum"),
+    13: ("S013", "Вьюнок полевой (берёзка)", "Convolvulus arvensis"),
+    14: ("S014", "Мальва лесная", "Malva sylvestris"),
+    15: ("S015", "Хлопчатник", "Gossypium hirsutum"),
+    16: ("S016", "Горчица полевая", "Sinapis arvensis"),
+    17: ("S017", "Сыть круглая", "Cyperus rotundus"),
+    18: ("S018", "Томат обыкновенный", "Solanum lycopersicum"),
+    19: ("S019", "Паслён чёрный", "Solanum nigrum"),
+    20: ("S020", "Паслён линейнолистный", "Solanum elaeagnifolium"),
+    21: ("S021", "Дурман свирепый", "Datura ferox"),
+    22: ("S022", "Дурман обыкновенный", "Datura stramonium"),
+    23: ("S023", "Портулак огородный", "Portulaca oleracea"),
+}
+
 
 class ModelType(str, Enum):
     """Supported model detection architectures."""
@@ -532,6 +599,10 @@ class OnnxDetector(BaseDetector):
         self._session: ort.InferenceSession | None = None
         self._input_name: str | None = None
         self._output_names: list[str] = []
+        self._classifier_session: ort.InferenceSession | None = None
+        self._cls_input_name: str | None = None
+        self._cls_output_names: list[str] = []
+        self.classifier_type: str = (self.settings.classifier_type or "none").lower()
 
         classes_p = Path(self.settings.classes_path)
         if not classes_p.is_file():
@@ -554,6 +625,94 @@ class OnnxDetector(BaseDetector):
             if meta.nms_iou_threshold is not None
             else float(self.settings.nms_iou_threshold)
         )
+
+    def _get_providers(self) -> list[str]:
+        """Return execution providers in priority order."""
+        if self._custom_providers:
+            return self._custom_providers
+        avail = ort.get_available_providers()
+        preferred_order = [
+            "CUDAExecutionProvider",
+            "ROCMExecutionProvider",
+            "TensorrtExecutionProvider",
+            "CPUExecutionProvider",
+        ]
+        providers = [p for p in preferred_order if p in avail]
+        return providers if providers else ["CPUExecutionProvider"]
+
+    def _resolve_classifier_path(self) -> Path | None:
+        """Resolve path to classifier ONNX model file."""
+        cls_p = self.settings.classifier_path
+        if cls_p is not None:
+            p = Path(cls_p)
+            if p.is_file():
+                return p
+            cand = get_models_dir() / p.name
+            if cand.is_file():
+                return cand
+            cand_repo = Path(__file__).resolve().parent.parent.parent.parent / "models" / "c07_rgb_geosaero" / p.name
+            if cand_repo.is_file():
+                return cand_repo
+
+        if self.classifier_type == "c07":
+            cands = [
+                get_models_dir() / "resnet50_dualhead_c07.onnx",
+                get_models_dir() / "best.onnx",
+                Path(__file__).resolve().parent.parent.parent.parent / "models" / "c07_rgb_geosaero" / "resnet50_dualhead_c07.onnx",
+            ]
+            for c in cands:
+                if c.is_file():
+                    return c
+        elif self.classifier_type == "c06":
+            cands = [
+                get_models_dir() / "resnet50_c06.onnx",
+                Path(__file__).resolve().parent.parent.parent.parent / "models" / "c06_rgb_species" / "resnet50_c06.onnx",
+            ]
+            for c in cands:
+                if c.is_file():
+                    return c
+        return None
+
+    def _load_classifier(self) -> None:
+        """Initialize ONNX InferenceSession for crop classification."""
+        if self._classifier_session is not None:
+            return
+        cls_path = self._resolve_classifier_path()
+        if cls_path is None or not cls_path.is_file():
+            logger.info("Classifier model for '%s' not found. Crop classification disabled.", self.classifier_type)
+            self._classifier_session = None
+            return
+
+        try:
+            providers = self._get_providers()
+            opts = ort.SessionOptions()
+            opts.enable_mem_pattern = True
+            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            self._classifier_session = ort.InferenceSession(
+                str(cls_path),
+                sess_options=opts,
+                providers=providers,
+            )
+            self._cls_input_name = self._classifier_session.get_inputs()[0].name
+            self._cls_output_names = [o.name for o in self._classifier_session.get_outputs()]
+            logger.info(
+                "Loaded ONNX classifier '%s' (%s) with %d outputs",
+                cls_path.name,
+                self.classifier_type.upper(),
+                len(self._cls_output_names),
+            )
+        except Exception as e:
+            logger.warning("Failed to load classifier from %s: %s", cls_path, e)
+            self._classifier_session = None
+
+    def set_classifier(self, classifier_type: str, classifier_path: Path | None = None) -> None:
+        """Dynamically configure or switch classifier model."""
+        self.classifier_type = classifier_type.lower()
+        if classifier_path is not None:
+            self.settings = self.settings.model_copy(update={"classifier_path": Path(classifier_path)})
+        self._classifier_session = None
+        if self.is_loaded and self.classifier_type != "none":
+            self._load_classifier()
 
     @staticmethod
     def available_providers() -> list[str]:
@@ -620,20 +779,7 @@ class OnnxDetector(BaseDetector):
             else:
                 raise DetectionError(f"ONNX model file not found: {model_path}")
 
-        if self._custom_providers:
-            providers = self._custom_providers
-        else:
-            avail = ort.get_available_providers()
-            # Prioritize hardware acceleration if present
-            preferred_order = [
-                "CUDAExecutionProvider",
-                "ROCMExecutionProvider",
-                "TensorrtExecutionProvider",
-                "CPUExecutionProvider",
-            ]
-            providers = [p for p in preferred_order if p in avail]
-            if not providers:
-                providers = ["CPUExecutionProvider"]
+        providers = self._get_providers()
 
         try:
             session_options = ort.SessionOptions()
@@ -657,11 +803,18 @@ class OnnxDetector(BaseDetector):
             self._session = None
             raise DetectionError(f"Failed to create ONNX InferenceSession from {model_path.name}: {e}") from e
 
+        # Optional crop classifier initialization
+        if self.classifier_type != "none":
+            self._load_classifier()
+
     def close(self) -> None:
         """Release ONNX InferenceSession and free GPU/system memory."""
         self._session = None
         self._input_name = None
         self._output_names = []
+        self._classifier_session = None
+        self._cls_input_name = None
+        self._cls_output_names = []
         if self._explicit_model_type:
             self.model_type = self._explicit_model_type
         else:
@@ -713,6 +866,9 @@ class OnnxDetector(BaseDetector):
         keep_indices = nms(boxes_arr, scores_arr, self.nms_iou_threshold, class_ids=class_ids)
 
         detected_weeds: list[DetectedWeed] = []
+        mean_rgb = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std_rgb = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
         for idx in keep_indices:
             bx1, by1, bx2, by2 = boxes_arr[idx]
             score = float(scores_arr[idx])
@@ -731,6 +887,51 @@ class OnnxDetector(BaseDetector):
             orig_x2 = max(orig_x1, min(float(orig_w), orig_x2))
             orig_y2 = max(orig_y1, min(float(orig_h), orig_y2))
 
+            stage_name: str | None = None
+            class_prob: float | None = None
+
+            # Optional second-stage crop classification
+            if self._classifier_session is not None and self._cls_input_name is not None:
+                pad_w = int(round((orig_x2 - orig_x1) * 0.10))
+                pad_h = int(round((orig_y2 - orig_y1) * 0.10))
+                cx1 = max(0, int(round(orig_x1)) - pad_w)
+                cy1 = max(0, int(round(orig_y1)) - pad_h)
+                cx2 = min(orig_w, int(round(orig_x2)) + pad_w)
+                cy2 = min(orig_h, int(round(orig_y2)) + pad_h)
+
+                if (cx2 - cx1) >= 4 and (cy2 - cy1) >= 4:
+                    crop_rgb = image[cy1:cy2, cx1:cx2]
+                    target_cls_w, target_cls_h = self.settings.classifier_input_size
+                    crop_res = cv2.resize(crop_rgb, (target_cls_w, target_cls_h), interpolation=cv2.INTER_LINEAR)
+                    crop_norm = (crop_res.astype(np.float32) / 255.0 - mean_rgb) / std_rgb
+                    # NCHW format: (1, 3, target_cls_h, target_cls_w)
+                    crop_tensor = np.transpose(crop_norm, (2, 0, 1))[np.newaxis, ...].astype(np.float32)
+
+                    try:
+                        cls_outs = self._classifier_session.run(None, {self._cls_input_name: crop_tensor})
+                        if self.classifier_type == "c07" and len(cls_outs) >= 2:
+                            logits_cat = cls_outs[0][0]
+                            logits_stg = cls_outs[1][0]
+                            p_cat = np.exp(logits_cat - np.max(logits_cat)) / np.sum(np.exp(logits_cat - np.max(logits_cat)))
+                            p_stg = np.exp(logits_stg - np.max(logits_stg)) / np.sum(np.exp(logits_stg - np.max(logits_stg)))
+                            cat_id = int(np.argmax(p_cat))
+                            stg_id = int(np.argmax(p_stg))
+
+                            class_name = C07_CATEGORIES[cat_id] if cat_id < len(C07_CATEGORIES) else class_name
+                            stage_name = C07_STAGES[stg_id] if stg_id < len(C07_STAGES) else "не определена"
+                            class_prob = float(p_cat[cat_id])
+                            c_id = cat_id
+                        elif self.classifier_type == "c06" and len(cls_outs) >= 1:
+                            logits = cls_outs[0][0]
+                            p = np.exp(logits - np.max(logits)) / np.sum(np.exp(logits - np.max(logits)))
+                            sp_id = int(np.argmax(p))
+                            code, ru_name, _ = C06_TAXONOMY.get(sp_id, (f"S{sp_id:03d}", "Неизвестный сорняк", ""))
+                            class_name = f"{ru_name} ({code})"
+                            class_prob = float(p[sp_id])
+                            c_id = sp_id
+                    except Exception as exc:
+                        logger.warning("Error running ONNX crop classification: %s", exc)
+
             # Normalize to [0.0..1.0]
             norm_x = min(1.0, max(0.0, orig_x1 / orig_w))
             norm_y = min(1.0, max(0.0, orig_y1 / orig_h))
@@ -744,6 +945,8 @@ class OnnxDetector(BaseDetector):
                 class_name=class_name,
                 confidence=round(score, 4),
                 bbox=bbox,
+                stage_name=stage_name,
+                class_prob=round(class_prob, 4) if class_prob is not None else None,
             )
             detected_weeds.append(weed_obj)
 

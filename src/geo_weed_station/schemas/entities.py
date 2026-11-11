@@ -48,6 +48,8 @@ class DetectedWeed(BaseModel):
     bbox: BBox
     world_x: float | None = None  # Metres in local_aruco or Longitude in wgs84
     world_y: float | None = None  # Metres in local_aruco or Latitude in wgs84
+    stage_name: str | None = None
+    class_prob: float | None = None
 
     @field_validator("confidence")
     @classmethod

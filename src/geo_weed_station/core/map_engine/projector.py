@@ -155,8 +155,8 @@ class NadirProjector(ProjectionStrategy):
             # Immutable update: create a new DetectedWeed instance
             projected_weed = det.model_copy(
                 update={
-                    "world_x": round(world_x, 6),
-                    "world_y": round(world_y, 6),
+                    "world_x": round(world_x, 8),
+                    "world_y": round(world_y, 8),
                 }
             )
             projected_weeds.append(projected_weed)

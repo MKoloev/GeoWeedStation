@@ -168,6 +168,9 @@ def parse_detection_item(
             if world_y is None:
                 world_y = target_local.get("y")
 
+        stage_name = item.get("stage_name")
+        class_prob = item.get("class_prob")
+
         return DetectedWeed(
             weed_id=weed_id,
             class_id=class_id,
@@ -176,6 +179,8 @@ def parse_detection_item(
             bbox=bbox,
             world_x=float(world_x) if world_x is not None else None,
             world_y=float(world_y) if world_y is not None else None,
+            stage_name=str(stage_name) if stage_name is not None else None,
+            class_prob=float(class_prob) if class_prob is not None else None,
         )
     except Exception as exc:
         logger.debug("Could not parse detection item: %s (%s)", item, exc)
@@ -271,6 +276,10 @@ def save_annotations_to_folder(
                 det_dict["world_x"] = round(float(d.world_x), 4)
             if d.world_y is not None:
                 det_dict["world_y"] = round(float(d.world_y), 4)
+            if d.stage_name is not None:
+                det_dict["stage_name"] = d.stage_name
+            if d.class_prob is not None:
+                det_dict["class_prob"] = round(float(d.class_prob), 4)
             serialized_dets.append(det_dict)
 
         entry = (

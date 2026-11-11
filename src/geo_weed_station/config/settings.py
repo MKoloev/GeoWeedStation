@@ -113,6 +113,9 @@ class DetectorSettings(BaseModel):
     nms_iou_threshold: float = 0.45
     input_size: tuple[int, int] = (640, 640)
     video_frame_skip: int = 3  # Detect on every N-th frame
+    classifier_type: str = "none"  # "none", "c07", "c06"
+    classifier_path: Path | None = None
+    classifier_input_size: tuple[int, int] = (224, 224)
 
     @field_validator("confidence_threshold")
     @classmethod

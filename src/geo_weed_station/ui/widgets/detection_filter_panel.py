@@ -38,9 +38,10 @@ class DetectionFilterState(BaseModel):
 
 
 class DetectionFilterPanel(QWidget):
-    """Widget allowing the user to toggle boxes, labels, confidence threshold, model, and per-class visibility."""
+    """Widget allowing the user to toggle boxes, labels, confidence threshold, model, classifier, and per-class visibility."""
 
     model_changed = Signal(Path)
+    classifier_changed = Signal(str)
     filter_changed = Signal(DetectionFilterState)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -75,6 +76,21 @@ class DetectionFilterPanel(QWidget):
         model_layout.addLayout(row_model)
 
         main_layout.addWidget(model_group)
+
+        # 0.5 Crop classifier selector group
+        cls_group = QGroupBox("Классификация видов", self)
+        cls_layout = QVBoxLayout(cls_group)
+        cls_layout.setContentsMargins(6, 6, 6, 6)
+        cls_layout.setSpacing(4)
+
+        self._combo_classifier = QComboBox(self)
+        self._combo_classifier.addItem("Отключена", userData="none")
+        self._combo_classifier.addItem("C07 (7 видов + фазы)", userData="c07")
+        self._combo_classifier.addItem("C06 (6 видов)", userData="c06")
+        self._combo_classifier.currentIndexChanged.connect(self._on_combo_classifier_changed)
+        cls_layout.addWidget(self._combo_classifier)
+
+        main_layout.addWidget(cls_group)
 
         # 1. Visibility group
         vis_group = QGroupBox("Отображение детекций", self)
@@ -191,6 +207,21 @@ class DetectionFilterPanel(QWidget):
         """Return currently selected ONNX model path or None."""
         data = self._combo_model.currentData()
         return Path(data) if data else None
+
+    def selected_classifier_type(self) -> str:
+        """Return currently selected classifier type: 'none', 'c07', or 'c06'."""
+        data = self._combo_classifier.currentData()
+        return str(data) if data else "none"
+
+    def set_classifier_type(self, cls_type: str) -> None:
+        """Set active classifier type in the combobox."""
+        target = (cls_type or "none").lower()
+        self._block_signals = True
+        for i in range(self._combo_classifier.count()):
+            if str(self._combo_classifier.itemData(i)).lower() == target:
+                self._combo_classifier.setCurrentIndex(i)
+                break
+        self._block_signals = False
 
     def load_classes_from_file(self, classes_path: Path) -> None:
         """Load and display classes from JSON file, updating default thresholds if provided."""
@@ -322,6 +353,12 @@ class DetectionFilterPanel(QWidget):
         model_path = self.selected_model()
         if model_path is not None:
             self.model_changed.emit(model_path)
+
+    def _on_combo_classifier_changed(self, index: int) -> None:
+        if self._block_signals or index < 0:
+            return
+        cls_type = self.selected_classifier_type()
+        self.classifier_changed.emit(cls_type)
 
     def _on_browse_model(self) -> None:
         from geo_weed_station.core.onnx_detector import get_models_dir

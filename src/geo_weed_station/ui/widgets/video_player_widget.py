@@ -129,6 +129,8 @@ class VideoFrameCanvas(QWidget):
             label_parts: list[str] = []
             if self._filter_state.show_labels:
                 label_parts.append(weed.class_name)
+                if weed.stage_name:
+                    label_parts.append(f"[{weed.stage_name}]")
             if self._filter_state.show_confidence:
                 label_parts.append(f"{weed.confidence:.2f}")
 

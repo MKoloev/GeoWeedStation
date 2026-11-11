@@ -120,6 +120,7 @@ class OfflineController(QObject):
                 resolved_model = available[0]
 
         self.filter_panel.set_available_models(available, active=resolved_model)
+        self.filter_panel.set_classifier_type(self._settings.detector.classifier_type)
 
         classes_p = resolve_classes_path(resolved_model, self._settings.detector.classes_path)
         if classes_p.is_file():
@@ -169,6 +170,7 @@ class OfflineController(QObject):
         # Filters & Model selection
         self.filter_panel.filter_changed.connect(self.on_filter_changed)
         self.filter_panel.model_changed.connect(self._on_model_changed)
+        self.filter_panel.classifier_changed.connect(self._on_classifier_changed)
 
         # Map synchronization
         self._map_ctrl.map_updated.connect(self._on_map_updated)
@@ -198,6 +200,26 @@ class OfflineController(QObject):
         self._window.status_bar_panel.set_message(
             f"Модель детекции переключена: {model_path.name} (классы: {classes_path.name})"
         )
+
+    def _on_classifier_changed(self, cls_type: str) -> None:
+        """Handle crop classifier switch: update settings and detector factory."""
+        logger.info("Switching crop classifier to %s", cls_type)
+        updated_det = self._settings.detector.model_copy(
+            update={"classifier_type": cls_type}
+        )
+        self._settings = self._settings.model_copy(update={"detector": updated_det})
+        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+
+        if self._video_worker is not None:
+            self._video_worker.set_detector_factory(self._detector_factory)
+
+        labels = {
+            "none": "Отключена",
+            "c07": "C07 (7 видов + фазы)",
+            "c06": "C06 (6 видов)",
+        }
+        lbl = labels.get(cls_type.lower(), cls_type)
+        self._window.status_bar_panel.set_message(f"Классификация видов: {lbl}")
 
     # -------------------------------------------------------------------------
     # Actions: Open single image, folder, video

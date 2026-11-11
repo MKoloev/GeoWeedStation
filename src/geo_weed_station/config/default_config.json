@@ -31,7 +31,9 @@
     "confidence_threshold": 0.25,
     "nms_iou_threshold": 0.45,
     "input_size": [640, 640],
-    "video_frame_skip": 3
+    "video_frame_skip": 3,
+    "classifier_type": "none",
+    "classifier_path": null
   },
   "map": {
     "heatmap_cell_m": 0.5,
