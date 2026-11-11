@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import encodings.idna  # noqa: F401
+import gc
+import netrc  # noqa: F401
 import threading
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
@@ -54,6 +57,7 @@ class ManagedWorker(QObject):
 
 def start_in_thread(worker: ManagedWorker, name: str) -> QThread:
     """Move worker to a new QThread, wire lifecycle signals, and start the thread."""
+    gc.collect()
     thread = QThread()
     thread.setObjectName(name)
     worker.moveToThread(thread)

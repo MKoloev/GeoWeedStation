@@ -297,6 +297,8 @@ class MapCanvas(QGraphicsView):
         self._points_list: list[WeedPoint] = []
         self._point_items: dict[str, WeedGraphicsPointItem] = {}
         self._footprint_items: list[MosaicFootprintItem] = []
+        self._footprint_keys: list[tuple[str, str | None, float, float]] = []
+        self._thumbnail_cache: dict[str, np.ndarray] = {}
         self._prescription_items: list[PrescriptionZoneGraphicsItem] = []
 
         self._setup_view()
@@ -429,17 +431,68 @@ class MapCanvas(QGraphicsView):
         """Return True if map canvas is locked."""
         return self._locked
 
+    def _get_cached_thumbnail(self, fp: FrameFootprint) -> QPixmap | None:
+        """Load and cache downscaled footprint RGB array using fast DCT scaling when possible."""
+        if fp.thumbnail is not None:
+            th = fp.thumbnail
+            th_h, th_w = th.shape[:2]
+            qimg = QImage(th.data, th_w, th_h, th_w * 3, QImage.Format.Format_RGB888).copy()
+            return QPixmap.fromImage(qimg)
+
+        if not fp.source_path:
+            return None
+
+        key = str(fp.source_path)
+        rgb = self._thumbnail_cache.get(key)
+        if rgb is None:
+            p = Path(key)
+            if not p.is_file():
+                return None
+            try:
+                img = cv2.imread(key, cv2.IMREAD_REDUCED_COLOR_8)
+                if img is None:
+                    img = cv2.imread(key, cv2.IMREAD_COLOR)
+                if img is not None and img.size > 0:
+                    h, w = img.shape[:2]
+                    max_dim = max(h, w)
+                    if max_dim > 400:
+                        scale = 400.0 / float(max_dim)
+                        img = cv2.resize(
+                            img,
+                            (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                    rgb = np.ascontiguousarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                    self._thumbnail_cache[key] = rgb
+            except Exception:
+                return None
+
+        if rgb is not None:
+            th_h, th_w = rgb.shape[:2]
+            qimg = QImage(rgb.data, th_w, th_h, th_w * 3, QImage.Format.Format_RGB888).copy()
+            return QPixmap.fromImage(qimg)
+        return None
+
     def set_mosaic_footprints(self, footprints: Sequence[FrameFootprint]) -> None:
         """Display quick-stitch aerial photo footprints and on-demand thumbnails."""
+        new_keys = [
+            (fp.frame_id, fp.source_path, round(fp.center_x, 4), round(fp.center_y, 4))
+            for fp in footprints
+        ]
+        if new_keys == self._footprint_keys and len(self._footprint_items) == len(footprints):
+            return
+
         for it in list(self._mosaic_group.childItems()):
             self._scene.removeItem(it)
         self._footprint_items.clear()
+        self._footprint_keys = new_keys
 
         if not footprints:
             return
 
         for fp in footprints:
-            item = MosaicFootprintItem(fp)
+            pm = self._get_cached_thumbnail(fp)
+            item = MosaicFootprintItem(fp, pixmap=pm)
             self._mosaic_group.addToGroup(item)
             self._footprint_items.append(item)
 

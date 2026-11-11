@@ -102,8 +102,8 @@ class BatchImageWorker(ManagedWorker):
                 self._detector = None
             if self._session is not None:
                 self._session.flush()
-            self.batch_finished.emit(ok, failed)
             self.finished.emit()
+            self.batch_finished.emit(ok, failed)
 
     @Slot()
     def cancel(self) -> None:

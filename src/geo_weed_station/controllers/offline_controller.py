@@ -22,6 +22,7 @@ from geo_weed_station.core.image_io import read_image
 from geo_weed_station.core.onnx_detector import (
     OnnxDetector,
     get_models_dir,
+    is_background_class,
     resolve_classes_path,
     scan_available_models,
 )
@@ -95,7 +96,9 @@ class OfflineController(QObject):
 
         # Active worker references
         self._batch_worker: BatchImageWorker | None = None
+        self._batch_thread: QObject | None = None
         self._video_worker: VideoWorker | None = None
+        self._video_thread: QObject | None = None
         self._current_source_folder: Path | None = None
         self._detections_by_path: dict[str, list[DetectedWeed]] = {}
 
@@ -126,8 +129,11 @@ class OfflineController(QObject):
         self.filter_panel.set_classifier_type(self._settings.detector.classifier_type)
 
         classes_p = resolve_classes_path(resolved_model, self._settings.detector.classes_path)
-        if classes_p.is_file():
-            self.filter_panel.load_classes_from_file(classes_p)
+        self.filter_panel.load_classes_for_mode(
+            cls_type=self._settings.detector.classifier_type,
+            classes_path=classes_p if classes_p.is_file() else None,
+            update_thresholds=True,
+        )
 
         if resolved_model.is_file():
             updated_det = self._settings.detector.model_copy(
@@ -135,12 +141,37 @@ class OfflineController(QObject):
             )
             self._settings = self._settings.model_copy(update={"detector": updated_det})
             if not self._has_custom_detector_factory:
-                self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+                self._detector_factory = lambda det_s=updated_det: OnnxDetector(det_s)
+
+    def _refresh_filter_panel_classes(
+        self,
+        *,
+        update_thresholds: bool = False,
+        include_loaded_detections: bool = True,
+    ) -> None:
+        """Reload base classes for current model/classifier mode and optionally append extra classes from loaded annotations."""
+        model_p = Path(self._settings.detector.model_path)
+        classes_p = resolve_classes_path(model_p, self._settings.detector.classes_path)
+        self.filter_panel.load_classes_for_mode(
+            cls_type=self._settings.detector.classifier_type,
+            classes_path=classes_p if classes_p.is_file() else None,
+            update_thresholds=update_thresholds,
+        )
+        if include_loaded_detections and self._detections_by_path:
+            loaded_classes = {
+                d.class_name
+                for dets in self._detections_by_path.values()
+                for d in dets
+                if d.class_name
+            }
+            if loaded_classes:
+                self.filter_panel.append_extra_classes(loaded_classes)
 
     def apply_settings(self, settings: AppSettings) -> None:
         """Dynamically apply updated application settings and refresh model configuration."""
         self._settings = settings
-        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+        det_s = self._settings.detector
+        self._detector_factory = lambda d=det_s: OnnxDetector(d)
         self._init_models_in_ui()
 
     def _embed_widgets_in_ui(self) -> None:
@@ -186,17 +217,20 @@ class OfflineController(QObject):
 
     def _on_model_changed(self, model_path: Path) -> None:
         """Handle model switch: resolve classes, reconfigure factory and update UI filter checkboxes."""
-        classes_path = resolve_classes_path(model_path, self._settings.detector.classes_path)
+        classes_path = resolve_classes_path(model_path)
         logger.info("Switching detection model to %s with classes %s", model_path.name, classes_path.name)
 
         updated_det = self._settings.detector.model_copy(
             update={"model_path": model_path, "classes_path": classes_path}
         )
         self._settings = self._settings.model_copy(update={"detector": updated_det})
-        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+        if not self._has_custom_detector_factory:
+            self._detector_factory = lambda det_s=updated_det: OnnxDetector(det_s)
 
-        if classes_path.is_file():
-            self.filter_panel.load_classes_from_file(classes_path)
+        self._refresh_filter_panel_classes(
+            update_thresholds=True,
+            include_loaded_detections=True,
+        )
 
         if self._video_worker is not None:
             self._video_worker.set_detector_factory(self._detector_factory)
@@ -206,21 +240,27 @@ class OfflineController(QObject):
         )
 
     def _on_classifier_changed(self, cls_type: str) -> None:
-        """Handle crop classifier switch: update settings and detector factory."""
+        """Handle crop classifier switch: update settings, detector factory, and filter panel class list."""
         logger.info("Switching crop classifier to %s", cls_type)
         updated_det = self._settings.detector.model_copy(
             update={"classifier_type": cls_type}
         )
         self._settings = self._settings.model_copy(update={"detector": updated_det})
-        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+        if not self._has_custom_detector_factory:
+            self._detector_factory = lambda det_s=updated_det: OnnxDetector(det_s)
+
+        self._refresh_filter_panel_classes(
+            update_thresholds=False,
+            include_loaded_detections=True,
+        )
 
         if self._video_worker is not None:
             self._video_worker.set_detector_factory(self._detector_factory)
 
         labels = {
             "none": "Отключена",
-            "c07": "C07 (7 видов + фазы)",
-            "c06": "C06 (6 видов)",
+            "c07": "C07 (10 категорий + фазы)",
+            "c06": "C06 (23 вида)",
         }
         lbl = labels.get(cls_type.lower(), cls_type)
         self._window.status_bar_panel.set_message(f"Классификация видов: {lbl}")
@@ -247,7 +287,9 @@ class OfflineController(QObject):
         file_path = Path(path)
         self._current_source_folder = file_path.parent
         self._detections_by_path.clear()
+        self.filter_panel.reset_extra_classes()
         self._map_ctrl.reset()
+        self.map_canvas.set_mosaic_footprints([])
         self.map_info_panel.clear_selection()
         self._window.central_tabs().setCurrentIndex(self._window.tab_index(TAB_IMAGE))
 
@@ -301,8 +343,7 @@ class OfflineController(QObject):
 
                     new_classes = {d.class_name for d in dets if d.class_name}
                     if new_classes:
-                        existing = set(self.filter_panel._class_names)
-                        self.filter_panel.set_classes(sorted(existing | new_classes))
+                        self.filter_panel.append_extra_classes(new_classes)
 
             progress.setLabelText("Подготовка предпросмотра...")
             progress.setValue(85)
@@ -349,7 +390,9 @@ class OfflineController(QObject):
         folder_path = Path(folder)
         self._current_source_folder = folder_path
         self._detections_by_path.clear()
+        self.filter_panel.reset_extra_classes()
         self._map_ctrl.reset()
+        self.map_canvas.set_mosaic_footprints([])
         self.map_info_panel.clear_selection()
 
         # Loading progress dialog giving immediate visual feedback to the user
@@ -394,10 +437,7 @@ class OfflineController(QObject):
                 # Sync classes with filter panel
                 all_classes = {d.class_name for dets in src.annotations_map.values() for d in dets if d.class_name}
                 if all_classes:
-                    existing = set(self.filter_panel._class_names)
-                    combined = sorted(existing | all_classes)
-                    if combined != self.filter_panel._class_names:
-                        self.filter_panel.set_classes(combined)
+                    self.filter_panel.append_extra_classes(all_classes)
 
                 # Ingest georeferenced frames into MapEngine (without decoding full pixel buffers)
                 georef_entries = [e for e in entries if e.has_xmp]
@@ -426,10 +466,11 @@ class OfflineController(QObject):
                     progress.setValue(85)
                     QApplication.processEvents()
 
-                    self.map_canvas.append_points(all_new_pts)
+                    self._on_map_updated()
+                    zones = self._map_ctrl.engine.build_prescription_zones()
+                    self.map_canvas.set_prescription_zones(zones)
                     self._map_ctrl.statistics_changed.emit(self._map_ctrl.engine.statistics())
                     self._map_ctrl.map_locked_changed.emit(False, "")
-                    self._on_map_updated()
 
             progress.setLabelText("Формирование списка файлов...")
             progress.setValue(90)
@@ -511,26 +552,29 @@ class OfflineController(QObject):
     def build_folder_report(self) -> FolderDetectionReport:
         """Build a structured FolderDetectionReport for the currently loaded folder/files."""
         gen = ReportGenerator()
+        state = self.filter_panel.current_state()
         return gen.build_report(
             entries=self.file_list_panel.model.entries,
             detections_by_path=self._detections_by_path,
             map_engine=self._map_ctrl.engine,
             detector_settings=self._settings.detector,
             source_folder=self._current_source_folder,
+            hidden_classes=state.hidden_classes,
+            min_confidence=state.min_confidence,
         )
 
     @Slot()
     def export_report(self) -> None:
         """Open report export dialog and save analytical report files to disk."""
         entries = self.file_list_panel.model.entries
-        points = self._map_ctrl.engine.weed_map.points
-        if not entries and not points:
+        all_points = self._map_ctrl.engine.weed_map.points
+        if not entries and not all_points:
             msg = "Нет данных для выгрузки отчета. Сначала откройте и обработайте папку со снимками."
             logger.info(msg)
             self._window.status_bar_panel.set_message(msg)
             return
 
-        has_georef = bool(not self._map_ctrl.is_locked and points)
+        has_georef = bool(not self._map_ctrl.is_locked and all_points)
         coord_system = self._map_ctrl.engine.weed_map.coord_system or CoordinateSystem.LOCAL_ARUCO
         if self._current_source_folder is not None:
             default_dir = (
@@ -564,17 +608,19 @@ class OfflineController(QObject):
             target_dir.mkdir(parents=True, exist_ok=True)
             report = self.build_folder_report()
             gen = ReportGenerator()
+            filtered_pts = self._map_ctrl.engine.filtered_points()
+            filtered_wm = self._map_ctrl.engine.filtered_weed_map()
 
             if ExportFormat.CSV in req.formats:
                 csv_path = target_dir / f"{req.base_name}.csv"
-                if points:
-                    gen._exporter.export_csv(points, csv_path)
+                if all_points:
+                    gen._exporter.export_csv(filtered_pts, csv_path)
                 else:
                     gen.export_detections_csv(report, csv_path)
 
             if ExportFormat.GEOJSON in req.formats and has_georef:
                 gen._exporter.export_geojson(
-                    self._map_ctrl.engine.weed_map,
+                    filtered_wm,
                     target_dir / f"{req.base_name}.geojson",
                     include_zones=True,
                 )
@@ -582,7 +628,7 @@ class OfflineController(QObject):
             if ExportFormat.PNG in req.formats and has_georef:
                 grid = self._map_ctrl.engine.build_heatmap()
                 gen._exporter.export_png(
-                    points=self._map_ctrl.engine.weed_map,
+                    points=filtered_wm,
                     output_path=target_dir / f"{req.base_name}.png",
                     grid=grid,
                     options=req.png_options,
@@ -635,6 +681,9 @@ class OfflineController(QObject):
         if self._video_worker is not None:
             old_worker = self._video_worker
             for sig, slot in (
+                (old_worker.frame_ready, self._on_video_frame_ready),
+                (old_worker.position_changed, self.video_player.set_position),
+                (old_worker.playback_ended, self._on_video_playback_ended),
                 (self.video_player.play_requested, old_worker.play),
                 (self.video_player.pause_requested, old_worker.pause),
                 (self.video_player.seek_requested, old_worker.seek),
@@ -646,9 +695,14 @@ class OfflineController(QObject):
                 except (RuntimeError, TypeError):
                     pass
             old_worker.request_stop()
+            if self._video_thread is not None:
+                self._video_thread.quit()
+                self._video_thread.wait(1500)
+                self._video_thread = None
             self._video_worker = None
 
         self.video_player.clear()
+        self.filter_panel.reset_extra_classes()
         self._map_ctrl.reset()
         self.map_info_panel.clear_selection()
         self._detections_by_path.clear()
@@ -662,7 +716,7 @@ class OfflineController(QObject):
             self._video_worker = worker
 
             # Connect signals
-            worker.frame_ready.connect(self.video_player.show_frame)
+            worker.frame_ready.connect(self._on_video_frame_ready)
             self.video_player.frame_consumed.connect(worker.frame_consumed)
             worker.position_changed.connect(self.video_player.set_position)
             worker.playback_ended.connect(self._on_video_playback_ended)
@@ -675,6 +729,7 @@ class OfflineController(QObject):
 
             # Move to worker thread
             thread = start_in_thread(worker, "video_worker_thread")
+            self._video_thread = thread
             self._window.register_thread(thread, worker)
 
             worker.open(path)
@@ -684,6 +739,14 @@ class OfflineController(QObject):
         except Exception as exc:
             logger.exception("Failed to initialize video worker: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка открытия видео: {exc}")
+
+    @Slot(object, list)
+    def _on_video_frame_ready(self, frame: object, detections: list[DetectedWeed]) -> None:
+        if detections:
+            new_classes = {d.class_name for d in detections if d.class_name}
+            if new_classes:
+                self.filter_panel.append_extra_classes(new_classes)
+        self.video_player.show_frame(frame, detections)
 
     def _on_video_playback_ended(self) -> None:
         self.video_player.set_playing(False)
@@ -701,7 +764,9 @@ class OfflineController(QObject):
             return
 
         self._detections_by_path.clear()
+        self.filter_panel.reset_extra_classes()
         self._map_ctrl.reset()
+        self.map_canvas.set_mosaic_footprints([])
         self.map_info_panel.clear_selection()
 
         if len(entries) == 1 and Path(entries[0].path).is_file():
@@ -729,6 +794,7 @@ class OfflineController(QObject):
 
         # Run in thread
         thread = start_in_thread(worker, "batch_image_worker_thread")
+        self._batch_thread = thread
         self._window.register_thread(thread, worker)
 
         self.batch_start_requested.connect(worker.process)
@@ -751,9 +817,29 @@ class OfflineController(QObject):
 
     @Slot(DetectionFilterState)
     def on_filter_changed(self, state: DetectionFilterState) -> None:
-        """Propagate detection display filter state to active viewers and update detector settings."""
+        """Propagate detection display filter state to active viewers, map, statistics, and detector settings."""
         self.image_viewer.apply_filter(state)
         self.video_player.apply_filter(state)
+
+        prev_hidden = self._map_ctrl.engine.hidden_classes
+        prev_conf = self._map_ctrl.engine.min_confidence
+        map_filter_changed = (
+            state.hidden_classes != prev_hidden
+            or abs(state.min_confidence - prev_conf) > 1e-6
+        )
+        self._map_ctrl.engine.set_filter(
+            hidden_classes=state.hidden_classes,
+            min_confidence=state.min_confidence,
+        )
+        if (
+            map_filter_changed
+            and not self._map_ctrl.is_locked
+            and (self._map_ctrl.engine.weed_map.points or self._map_ctrl.engine.weed_map.footprints)
+        ):
+            self._refresh_map_filtered_layers()
+            zones = self._map_ctrl.engine.build_prescription_zones()
+            self.map_canvas.set_prescription_zones(zones)
+            self._map_ctrl.statistics_changed.emit(self._map_ctrl.engine.statistics())
 
         updated_det = self._settings.detector.model_copy(
             update={
@@ -763,7 +849,7 @@ class OfflineController(QObject):
         )
         self._settings = self._settings.model_copy(update={"detector": updated_det})
         if not self._has_custom_detector_factory:
-            self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+            self._detector_factory = lambda det_s=updated_det: OnnxDetector(det_s)
             if self._video_worker is not None:
                 self._video_worker.set_detector_factory(self._detector_factory)
 
@@ -791,6 +877,7 @@ class OfflineController(QObject):
 
     def _on_file_list_cleared(self) -> None:
         self._detections_by_path.clear()
+        self.filter_panel.reset_extra_classes()
         self.image_viewer.clear()
         self._map_ctrl.reset()
         self.map_info_panel.clear_selection()
@@ -829,16 +916,21 @@ class OfflineController(QObject):
         if payload.detections:
             new_classes = {d.class_name for d in payload.detections if d.class_name}
             if new_classes:
-                existing = set(self.filter_panel._class_names)
-                combined = sorted(existing | new_classes)
-                if combined != self.filter_panel._class_names:
-                    self.filter_panel.set_classes(combined)
+                self.filter_panel.append_extra_classes(new_classes)
 
         # Stream-ingest into map engine during batch without blocking GUI thread
         if payload.has_georef():
             try:
                 new_pts = self._map_ctrl.engine.ingest_frame(payload)
-                self.map_canvas.append_points(new_pts)
+                state = self.filter_panel.current_state()
+                visible_new_pts = [
+                    pt
+                    for pt in new_pts
+                    if not is_background_class(pt.class_name)
+                    and pt.class_name not in state.hidden_classes
+                    and pt.confidence >= state.min_confidence
+                ]
+                self.map_canvas.append_points(visible_new_pts)
                 self._map_ctrl.statistics_changed.emit(self._map_ctrl.engine.statistics())
                 self._map_ctrl.map_locked_changed.emit(False, "")
             except Exception as exc:
@@ -856,6 +948,10 @@ class OfflineController(QObject):
         self._window.status_bar_panel.set_message(
             f"Обработка завершена: успешно {succeeded}, ошибок {failed}"
         )
+        if self._batch_thread is not None:
+            self._batch_thread.quit()
+            self._batch_thread.wait(2000)
+            self._batch_thread = None
         self._batch_worker = None
 
         # Build final aggregated layers: deduplicated points, KDE heatmap, prescription zones, mosaic, route
@@ -871,12 +967,16 @@ class OfflineController(QObject):
             ]
             self.map_canvas.set_route(wps)
 
-    def _on_map_updated(self) -> None:
-        points = self._map_ctrl.engine.weed_map.points
-        dedup = self._map_ctrl.engine.weed_map.deduplicated_points()
+    def _refresh_map_filtered_layers(self) -> None:
+        """Update map points and heatmap for current filter without rebuilding mosaic footprints."""
+        points = self._map_ctrl.engine.filtered_points()
+        dedup = self._map_ctrl.engine.filtered_deduplicated_points()
         self.map_canvas.set_points(dedup if dedup else points)
         grid = self._map_ctrl.engine.build_heatmap()
         self.map_canvas.set_heatmap(grid)
+
+    def _on_map_updated(self) -> None:
+        self._refresh_map_filtered_layers()
         self.map_canvas.set_mosaic_footprints(self._map_ctrl.engine.weed_map.footprints)
 
     def _on_map_locked_changed(self, locked: bool, reason: str) -> None:

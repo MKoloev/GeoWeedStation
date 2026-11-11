@@ -88,6 +88,39 @@ C06_TAXONOMY: dict[int, tuple[str, str, str]] = {
     23: ("S023", "Портулак огородный", "Portulaca oleracea"),
 }
 
+BACKGROUND_CLASS_NAMES: frozenset[str] = frozenset(
+    {
+        "background",
+        "Background",
+        "Фон",
+        "Фон / Не растение",
+        "Фон / Не растение (S000)",
+        "S000",
+    }
+)
+
+
+def is_background_class(class_name: str | None) -> bool:
+    """Return True if class_name corresponds to a background / non-plant class."""
+    if not class_name:
+        return False
+    return class_name.strip() in BACKGROUND_CLASS_NAMES
+
+
+def get_classifier_class_names(classifier_type: str) -> list[str]:
+    """Return canonical display class names for the given second-stage classifier."""
+    cls_type = (classifier_type or "none").lower().strip()
+    if cls_type == "c07":
+        return list(C07_CATEGORIES[1:])
+    if cls_type == "c06":
+        return [
+            f"{ru_name} ({code})"
+            for sp_id, (code, ru_name, _) in sorted(C06_TAXONOMY.items())
+            if sp_id != 0
+        ]
+    return []
+
+
 
 class ModelType(str, Enum):
     """Supported model detection architectures."""
@@ -556,9 +589,11 @@ def get_models_dir(custom_path: Path | None = None) -> Path:
     """Resolve the models directory robustly across PyInstaller bundle, source root, and CWD."""
     if custom_path is not None:
         p = Path(custom_path)
-        if p.is_dir():
+        if p.is_dir() and (any(p.glob("*.onnx")) or (p / "classes.json").is_file()):
             return p.resolve()
-        if p.parent.is_dir():
+        if p.is_file() and p.parent.is_dir():
+            return p.parent.resolve()
+        if p.parent.is_dir() and (any(p.parent.glob("*.onnx")) or (p.parent / "classes.json").is_file()):
             return p.parent.resolve()
 
     if hasattr(sys, "_MEIPASS"):
@@ -578,11 +613,16 @@ def get_models_dir(custom_path: Path | None = None) -> Path:
 
 
 def scan_available_models(directory: Path | None = None) -> list[Path]:
-    """Scan directory for valid .onnx model files in deterministic order."""
+    """Scan directory for valid .onnx detector model files in deterministic order."""
     dir_path = get_models_dir(directory) if directory is None else Path(directory)
     if not dir_path.is_dir():
         return []
-    models = [p for p in dir_path.glob("*.onnx") if p.is_file()]
+    classifier_markers = ("resnet", "dualhead", "_c07", "_c06")
+    models = [
+        p
+        for p in dir_path.glob("*.onnx")
+        if p.is_file() and not any(m in p.stem.lower() for m in classifier_markers)
+    ]
     return sorted(models, key=lambda p: p.name.lower())
 
 
@@ -907,6 +947,7 @@ class OnnxDetector(BaseDetector):
                     # NCHW format: (1, 3, target_cls_h, target_cls_w)
                     crop_tensor = np.transpose(crop_norm, (2, 0, 1))[np.newaxis, ...].astype(np.float32)
 
+                    is_background_crop = False
                     try:
                         cls_outs = self._classifier_session.run(None, {self._cls_input_name: crop_tensor})
                         if self.classifier_type == "c07" and len(cls_outs) >= 2:
@@ -917,20 +958,29 @@ class OnnxDetector(BaseDetector):
                             cat_id = int(np.argmax(p_cat))
                             stg_id = int(np.argmax(p_stg))
 
-                            class_name = C07_CATEGORIES[cat_id] if cat_id < len(C07_CATEGORIES) else class_name
-                            stage_name = C07_STAGES[stg_id] if stg_id < len(C07_STAGES) else "не определена"
-                            class_prob = float(p_cat[cat_id])
-                            c_id = cat_id
+                            if cat_id == 0:
+                                is_background_crop = True
+                            else:
+                                class_name = C07_CATEGORIES[cat_id] if cat_id < len(C07_CATEGORIES) else class_name
+                                stage_name = C07_STAGES[stg_id] if stg_id < len(C07_STAGES) else "не определена"
+                                class_prob = float(p_cat[cat_id])
+                                c_id = cat_id
                         elif self.classifier_type == "c06" and len(cls_outs) >= 1:
                             logits = cls_outs[0][0]
                             p = np.exp(logits - np.max(logits)) / np.sum(np.exp(logits - np.max(logits)))
                             sp_id = int(np.argmax(p))
-                            code, ru_name, _ = C06_TAXONOMY.get(sp_id, (f"S{sp_id:03d}", "Неизвестный сорняк", ""))
-                            class_name = f"{ru_name} ({code})"
-                            class_prob = float(p[sp_id])
-                            c_id = sp_id
+                            if sp_id == 0:
+                                is_background_crop = True
+                            else:
+                                code, ru_name, _ = C06_TAXONOMY.get(sp_id, (f"S{sp_id:03d}", "Неизвестный сорняк", ""))
+                                class_name = f"{ru_name} ({code})"
+                                class_prob = float(p[sp_id])
+                                c_id = sp_id
                     except Exception as exc:
                         logger.warning("Error running ONNX crop classification: %s", exc)
+
+                    if is_background_crop or is_background_class(class_name):
+                        continue
 
             # Normalize to [0.0..1.0]
             norm_x = min(1.0, max(0.0, orig_x1 / orig_w))

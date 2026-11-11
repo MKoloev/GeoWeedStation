@@ -69,11 +69,142 @@ def test_offline_controller_classifier_switch(qtbot, tmp_path):
     offline.filter_panel._combo_classifier.setCurrentIndex(2)
     assert offline._settings.detector.classifier_type == "c06"
     assert offline._detector_factory().classifier_type == "c06"
+    assert len(offline.filter_panel._class_names) == 23
+    assert all("S000" not in c and "Фон" not in c for c in offline.filter_panel._class_names)
+
+    # Switch to c07
+    offline.filter_panel._combo_classifier.setCurrentIndex(1)
+    assert offline._settings.detector.classifier_type == "c07"
+    from geo_weed_station.core.onnx_detector import C07_CATEGORIES
+
+    assert offline.filter_panel._class_names == list(C07_CATEGORIES[1:])
+    assert "background" not in offline.filter_panel._class_names
+    assert "plant" not in offline.filter_panel._class_names
 
     # Switch back to none
     offline.filter_panel._combo_classifier.setCurrentIndex(0)
     assert offline._settings.detector.classifier_type == "none"
     assert offline._detector_factory().classifier_type == "none"
+
+
+def test_filter_panel_extra_classes_and_map_report_filtering(qtbot, tmp_path):
+    """Verify extra classes appending and class filter propagation to MapCanvas, statistics, and reports."""
+    import cv2
+    from PySide6.QtCore import QSettings
+    from geo_weed_station.controllers.map_controller import MapController
+    from geo_weed_station.controllers.offline_controller import OfflineController
+    from geo_weed_station.core.map_engine.weed_map import MapEngine
+    from geo_weed_station.core.onnx_detector import C07_CATEGORIES
+    from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
+    from geo_weed_station.ui.main_window import MainWindow
+
+    st = AppSettings(workdir=tmp_path)
+    engine = MapEngine(projector=NadirProjector(), settings=st.map)
+    map_ctrl = MapController(engine=engine)
+    qset = QSettings(str(tmp_path / "ui.ini"), QSettings.IniFormat)
+    window = MainWindow(qsettings=qset)
+    qtbot.addWidget(window)
+    offline = OfflineController(window=window, map_ctrl=map_ctrl, settings=st)
+
+    # 1. Switch to C07 -> 10 base categories
+    offline.filter_panel._combo_classifier.setCurrentIndex(1)
+    assert offline.filter_panel._class_names == list(C07_CATEGORIES[1:])
+
+    # 2. Append extra classes from legacy annotations (background and plant must be ignored in C07 mode)
+    offline.filter_panel.append_extra_classes(["background", "plant", "Legacy_Amaranthus"])
+    assert offline.filter_panel._class_names == list(C07_CATEGORIES[1:]) + ["Legacy_Amaranthus"]
+
+    # 3. Ingest two georeferenced detections of different classes into MapEngine and OfflineController
+    img_path = tmp_path / "frame_001.jpg"
+    cv2.imwrite(str(img_path), np.zeros((100, 100, 3), dtype=np.uint8))
+    entry = FileEntry(
+        path=str(img_path),
+        size_bytes=img_path.stat().st_size,
+        status=ProcessingStatus.DONE,
+        has_xmp=True,
+        detections_count=2,
+    )
+    offline.file_list_panel.set_entries([entry])
+
+    det_vyunok = DetectedWeed(
+        weed_id="w_vyunok",
+        class_id=2,
+        class_name="Вьюнок",
+        confidence=0.85,
+        bbox=BBox(x=0.1, y=0.1, w=0.1, h=0.1),
+        stage_name="всходы",
+        class_prob=0.9,
+    )
+    det_zlak = DetectedWeed(
+        weed_id="w_zlak",
+        class_id=8,
+        class_name="Злаковые",
+        confidence=0.80,
+        bbox=BBox(x=0.5, y=0.5, w=0.1, h=0.1),
+        stage_name="2-4 листа",
+        class_prob=0.88,
+    )
+    det_bg = DetectedWeed(
+        weed_id="w_bg",
+        class_id=0,
+        class_name="background",
+        confidence=0.90,
+        bbox=BBox(x=0.7, y=0.7, w=0.1, h=0.1),
+    )
+
+    pose = CameraSpatialPose(
+        coordinate_system=CoordinateSystem.LOCAL_ARUCO,
+        x=0.0,
+        y=0.0,
+        altitude_m=2.0,
+        roll_deg=0.0,
+        pitch_deg=-90.0,
+        yaw_deg=0.0,
+    )
+    optics = SensorOptics(
+        focal_length_mm=16.0,
+        sensor_width_mm=13.2,
+        sensor_height_mm=8.8,
+        principal_point_px=(500.0, 500.0),
+    )
+    payload = FramePayload(
+        frame_id="frame_001",
+        source_path=str(img_path),
+        image_size_px=(1000, 1000),
+        pose=pose,
+        optics=optics,
+        detections=[det_vyunok, det_zlak, det_bg],
+    )
+    offline._on_batch_frame_processed(payload)
+    offline._on_map_updated()
+
+    # Background is automatically excluded; 2 real weeds are active
+    assert len(offline._map_ctrl.engine.filtered_points()) == 2
+    assert offline._map_ctrl.engine.statistics().total_weeds == 2
+    assert offline.map_info_panel.lbl_total_weeds.text() == "2"
+
+    # 4. Uncheck "Вьюнок" in filter_panel -> MapCanvas, statistics, and report must exclude "Вьюнок"
+    for i in range(offline.filter_panel._list_classes.count()):
+        it = offline.filter_panel._list_classes.item(i)
+        if it.text() == "Вьюнок":
+            it.setCheckState(Qt.CheckState.Unchecked)
+            break
+
+    assert "Вьюнок" in offline.filter_panel.current_state().hidden_classes
+    assert [p.class_name for p in offline._map_ctrl.engine.filtered_points()] == ["Злаковые"]
+    assert offline._map_ctrl.engine.statistics().total_weeds == 1
+    assert offline._map_ctrl.engine.statistics().by_class == {"Злаковые": 1}
+    assert offline.map_info_panel.lbl_total_weeds.text() == "1"
+
+    report = offline.build_folder_report()
+    assert report.total_detections == 1
+    assert report.unique_weeds == 1
+    assert report.by_class == {"Злаковые": 1}
+    assert [d.class_name for d in report.detections] == ["Злаковые"]
+
+    # 5. Clearing file list resets extra classes back to base C07 categories
+    offline._on_file_list_cleared()
+    assert offline.filter_panel._class_names == list(C07_CATEGORIES[1:])
 
 
 def test_map_canvas_grid_axis_labels_and_meters(qtbot):

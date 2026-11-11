@@ -202,3 +202,45 @@ def test_onnx_detector_two_stage_c07_integration(tmp_path: Path):
 
     detector.close()
     assert not detector.is_loaded
+
+
+def test_onnx_detector_filters_out_background_after_second_stage(tmp_path: Path):
+    """Verify OnnxDetector.detect skips detections classified as background (cat_id=0 in C07, sp_id=0 in C06)."""
+    from tests.helpers.make_dummy_onnx import create_dummy_yolo_onnx
+
+    det_model = create_dummy_yolo_onnx(tmp_path / "dummy_yolo.onnx")
+    settings = DetectorSettings(
+        model_path=det_model,
+        classifier_type="c07",
+        confidence_threshold=0.3,
+    )
+    detector = OnnxDetector(settings, providers=["CPUExecutionProvider"])
+    detector.load()
+
+    class _DummyBgSession:
+        def run(self, _output_names, _input_feed):
+            # cat_id = 0 ("background") has highest logit
+            logits_cat = np.array([[10.0] + [0.0] * 10], dtype=np.float32)
+            logits_stg = np.array([[5.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float32)
+            return [logits_cat, logits_stg]
+
+    detector._classifier_session = _DummyBgSession()
+    detector._cls_input_name = "images"
+
+    img_rgb = np.full((640, 640, 3), 120, dtype=np.uint8)
+    dets_c07_bg = detector.detect(img_rgb)
+    assert dets_c07_bg == []
+
+    # Same for C06 when sp_id = 0 ("S000 Фон / Не растение")
+    detector.classifier_type = "c06"
+
+    class _DummyC06BgSession:
+        def run(self, _output_names, _input_feed):
+            logits = np.array([[10.0] + [0.0] * 23], dtype=np.float32)
+            return [logits]
+
+    detector._classifier_session = _DummyC06BgSession()
+    dets_c06_bg = detector.detect(img_rgb)
+    assert dets_c06_bg == []
+
+    detector.close()

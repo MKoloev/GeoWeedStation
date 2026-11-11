@@ -9,13 +9,15 @@ import io
 import tempfile
 import zipfile
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
 from geo_weed_station.config.settings import DetectorSettings
+from geo_weed_station.core.map_engine.deduplication import deduplicate_weeds
 from geo_weed_station.core.map_engine.exporter import MapExporter
 from geo_weed_station.core.map_engine.weed_map import MapEngine
+from geo_weed_station.core.onnx_detector import is_background_class
 from geo_weed_station.core.xmp_parser import extract_spatial_data
 from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.map_models import PngExportOptions, PrescriptionZone, WeedPoint
@@ -60,6 +62,8 @@ class ReportGenerator:
         map_engine: MapEngine | None = None,
         detector_settings: DetectorSettings | None = None,
         source_folder: Path | None = None,
+        hidden_classes: Iterable[str] | None = None,
+        min_confidence: float | None = None,
     ) -> FolderDetectionReport:
         """Aggregate file entries, detections, and optional map analytics into FolderDetectionReport."""
         now_utc = datetime.now(timezone.utc)
@@ -81,6 +85,26 @@ class ReportGenerator:
             conf_thr = float(detector_settings.confidence_threshold)
             iou_thr = float(detector_settings.nms_iou_threshold)
 
+        active_hidden: frozenset[str] = (
+            frozenset(hidden_classes)
+            if hidden_classes is not None
+            else (map_engine.hidden_classes if map_engine is not None else frozenset())
+        )
+        active_min_conf: float = (
+            float(min_confidence)
+            if min_confidence is not None
+            else (map_engine.min_confidence if map_engine is not None else 0.0)
+        )
+        if min_confidence is not None:
+            conf_thr = active_min_conf
+
+        def _is_visible(cls_name: str, conf: float) -> bool:
+            return (
+                not is_background_class(cls_name)
+                and cls_name not in active_hidden
+                and conf >= active_min_conf
+            )
+
         # Build footprint lookup from MapEngine if available
         footprint_by_id: dict[str, object] = {}
         raw_points_by_frame_and_id: dict[tuple[str, str], WeedPoint] = {}
@@ -91,8 +115,12 @@ class ReportGenerator:
         if map_engine is not None:
             for fp in map_engine.weed_map.footprints:
                 footprint_by_id[fp.frame_id] = fp
-            map_points = list(map_engine.weed_map.points)
-            dedup_points = map_engine.weed_map.deduplicated_points()
+            map_points = [
+                pt
+                for pt in map_engine.weed_map.points
+                if _is_visible(pt.class_name, pt.confidence)
+            ]
+            dedup_points = deduplicate_weeds(map_points)
             for pt in map_points:
                 raw_points_by_frame_and_id[(pt.source_frame, pt.weed_id)] = pt
             for dpt in dedup_points:
@@ -191,8 +219,19 @@ class ReportGenerator:
         for entry in entries:
             p = Path(entry.path)
             frame_id = p.stem
-            dets = _lookup_detections(entry.path, detections_by_path)
-            det_count = len(dets) if dets else (entry.detections_count or 0)
+            raw_dets = _lookup_detections(entry.path, detections_by_path)
+            dets = [d for d in raw_dets if _is_visible(d.class_name, d.confidence)]
+            has_det_record = bool(raw_dets) or (
+                entry.path in detections_by_path
+                or str(p) in detections_by_path
+                or p.name in detections_by_path
+                or p.stem in detections_by_path
+            )
+            det_count = (
+                len(dets)
+                if (has_det_record or active_hidden or active_min_conf > 0.0)
+                else (entry.detections_count or 0)
+            )
 
             total_size_bytes += max(0, entry.size_bytes)
             if entry.has_xmp:
@@ -200,7 +239,7 @@ class ReportGenerator:
             else:
                 files_without_xmp += 1
 
-            if entry.status in (ProcessingStatus.DONE, ProcessingStatus.NO_METADATA) or dets:
+            if entry.status in (ProcessingStatus.DONE, ProcessingStatus.NO_METADATA) or raw_dets:
                 processed_files += 1
             elif entry.status == ProcessingStatus.ERROR:
                 error_files += 1
@@ -318,16 +357,20 @@ class ReportGenerator:
         critical_area_percent = 0.0
         zones: list[PrescriptionZone] = []
 
-        if map_engine is not None and not map_engine.is_locked() and map_points:
+        if map_engine is not None and not map_engine.is_locked() and (map_points or map_engine.weed_map.points):
             coord_sys_global = map_engine.weed_map.coord_system.value
-            if map_engine._current_grid is None:
-                map_engine.build_heatmap()
+            prev_hidden = map_engine.hidden_classes
+            prev_conf = map_engine.min_confidence
+            map_engine.set_filter(hidden_classes=active_hidden, min_confidence=active_min_conf)
+            map_engine.build_heatmap()
             stats = map_engine.statistics()
             surveyed_area_m2 = stats.surveyed_area_m2
             mean_density_per_m2 = stats.mean_density_per_m2
             critical_area_percent = stats.critical_area_percent
-            zones = list(map_engine.weed_map.prescription_zones) or map_engine.build_prescription_zones()
+            zones = map_engine.build_prescription_zones()
             unique_weeds = len(dedup_points) if dedup_points else len(map_points)
+            if prev_hidden != active_hidden or abs(prev_conf - active_min_conf) > 1e-6:
+                map_engine.set_filter(hidden_classes=prev_hidden, min_confidence=prev_conf)
         else:
             for f in frame_items:
                 if f.coordinate_system:
@@ -498,7 +541,7 @@ class ReportGenerator:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmp:
                 tmp_path = Path(tmp.name)
                 self._exporter.to_png(
-                    wm=map_engine.weed_map,
+                    wm=map_engine.filtered_weed_map(),
                     grid=grid,
                     path=tmp_path,
                     options=options or PngExportOptions(),
@@ -841,7 +884,7 @@ class ReportGenerator:
 
             if map_engine is not None and not map_engine.is_locked() and map_engine.weed_map.points:
                 geojson_file = tmp_dir / "weed_map.geojson"
-                self._exporter.to_geojson(map_engine.weed_map, geojson_file, include_zones=True)
+                self._exporter.to_geojson(map_engine.filtered_weed_map(), geojson_file, include_zones=True)
                 files_to_pack.append(geojson_file)
 
                 if map_png_bytes is not None:

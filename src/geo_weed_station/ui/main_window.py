@@ -74,6 +74,11 @@ class MainWindow(QMainWindow):
         self._threads: list[tuple[QThread, QObject | None]] = []
         self._pages: dict[str, QStackedWidget] = {}
         self._map_locked = False
+        self.destroyed.connect(
+            lambda _obj=None, threads=self._threads, timeout=self.SHUTDOWN_TIMEOUT_MS: (
+                MainWindow._shutdown_thread_list(threads, timeout)
+            )
+        )
 
         self._build_tabs()
         self._build_actions()
@@ -278,27 +283,46 @@ class MainWindow(QMainWindow):
 
     def register_thread(self, thread: QThread, worker: QObject | None = None) -> None:
         """Track a worker thread so closeEvent can stop it and wait for completion."""
+        self._threads = [
+            (t, w) for t, w in self._threads if t.isRunning()
+        ]
         self._threads.append((thread, worker))
 
-    def shutdown_threads(self, timeout_ms: int | None = None) -> bool:
-        """Request workers to stop, quit their threads and wait. Returns True if all stopped."""
-        timeout = self.SHUTDOWN_TIMEOUT_MS if timeout_ms is None else timeout_ms
-        for _thread, worker in self._threads:
+    @staticmethod
+    def _shutdown_thread_list(
+        threads: list[tuple[QThread, QObject | None]], timeout: int
+    ) -> bool:
+        for _thread, worker in list(threads):
             stop = getattr(worker, "request_stop", None)
             if callable(stop):
-                stop()
+                try:
+                    stop()
+                except RuntimeError:
+                    pass
         all_ok = True
-        remaining = []
-        for thread, worker in self._threads:
-            thread.quit()
-            stopped = thread.wait(timeout)
-            is_alive = (not stopped) or thread.isRunning() or (worker is not None and getattr(worker, "_running", False))
+        remaining: list[tuple[QThread, QObject | None]] = []
+        for thread, worker in list(threads):
+            try:
+                thread.quit()
+                stopped = thread.wait(timeout)
+                is_alive = (
+                    (not stopped)
+                    or thread.isRunning()
+                    or (worker is not None and getattr(worker, "_running", False))
+                )
+            except RuntimeError:
+                continue
             if is_alive:
                 logger.error("Thread %s did not stop within %d ms", thread.objectName(), timeout)
                 all_ok = False
                 remaining.append((thread, worker))
-        self._threads = remaining
+        threads[:] = remaining
         return all_ok
+
+    def shutdown_threads(self, timeout_ms: int | None = None) -> bool:
+        """Request workers to stop, quit their threads and wait. Returns True if all stopped."""
+        timeout = self.SHUTDOWN_TIMEOUT_MS if timeout_ms is None else timeout_ms
+        return self._shutdown_thread_list(self._threads, timeout)
 
     # --------------------------------------------------------------- private
     def _apply_mode(self, mode: AppMode) -> None:

@@ -78,12 +78,19 @@ class ExportController(QObject):
             if self._offline_ctrl is not None
             else self._settings.detector
         )
+        filter_state = (
+            self._offline_ctrl.filter_panel.current_state()
+            if self._offline_ctrl is not None
+            else None
+        )
         return self._report_generator.build_report(
             entries=entries,
             detections_by_path=dets_by_path,
             map_engine=self._map_ctrl.engine,
             detector_settings=det_settings,
             source_folder=source_folder,
+            hidden_classes=filter_state.hidden_classes if filter_state is not None else None,
+            min_confidence=filter_state.min_confidence if filter_state is not None else None,
         )
 
     @Slot()
@@ -181,8 +188,10 @@ class ExportController(QObject):
                     pass
 
             target_dir.mkdir(parents=True, exist_ok=True)
-            points = self._map_ctrl.engine.weed_map.points
-            has_georef = bool(not self._map_ctrl.is_locked and points)
+            all_points = self._map_ctrl.engine.weed_map.points
+            points = self._map_ctrl.engine.filtered_points()
+            has_georef = bool(not self._map_ctrl.is_locked and all_points)
+            filtered_wm = self._map_ctrl.engine.filtered_weed_map()
 
             report: FolderDetectionReport | None = None
             needs_report = any(
@@ -193,14 +202,14 @@ class ExportController(QObject):
                     ExportFormat.FRAMES_CSV,
                     ExportFormat.ZIP_BUNDLE,
                 )
-            ) or (ExportFormat.CSV in req.formats and not points)
+            ) or (ExportFormat.CSV in req.formats and not all_points)
 
             if needs_report:
                 report = self.build_current_report()
 
             if ExportFormat.CSV in req.formats:
                 csv_path = target_dir / f"{req.base_name}.csv"
-                if points:
+                if all_points:
                     self._exporter.export_csv(points, csv_path)
                 elif report is not None:
                     self._report_generator.export_detections_csv(report, csv_path)
@@ -208,14 +217,14 @@ class ExportController(QObject):
             if ExportFormat.GEOJSON in req.formats and has_georef:
                 geojson_path = target_dir / f"{req.base_name}.geojson"
                 self._exporter.export_geojson(
-                    self._map_ctrl.engine.weed_map, geojson_path, include_zones=True
+                    filtered_wm, geojson_path, include_zones=True
                 )
 
             if ExportFormat.PNG in req.formats and has_georef:
                 png_path = target_dir / f"{req.base_name}.png"
                 grid = self._map_ctrl.engine.build_heatmap()
                 self._exporter.export_png(
-                    points=self._map_ctrl.engine.weed_map,
+                    points=filtered_wm,
                     output_path=png_path,
                     grid=grid,
                     options=req.png_options,

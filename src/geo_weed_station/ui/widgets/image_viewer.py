@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from geo_weed_station.core.onnx_detector import is_background_class
 from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.ui.widgets.detection_filter_panel import DetectionFilterState
 
@@ -84,7 +85,7 @@ class DetectionGraphicsItem(QGraphicsRectItem):
             self.setVisible(False)
             return
 
-        if self.weed.class_name in state.hidden_classes:
+        if self.weed.class_name in state.hidden_classes or is_background_class(self.weed.class_name):
             self.setVisible(False)
             return
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,6 +47,8 @@ class DetectionFilterPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._block_signals = False
+        self._base_classes: list[str] = []
+        self._extra_classes: list[str] = []
         self._class_names: list[str] = []
         self._hidden_classes: set[str] = set()
 
@@ -85,8 +87,8 @@ class DetectionFilterPanel(QWidget):
 
         self._combo_classifier = QComboBox(self)
         self._combo_classifier.addItem("Отключена", userData="none")
-        self._combo_classifier.addItem("C07 (7 видов + фазы)", userData="c07")
-        self._combo_classifier.addItem("C06 (6 видов)", userData="c06")
+        self._combo_classifier.addItem("C07 (10 категорий + фазы)", userData="c07")
+        self._combo_classifier.addItem("C06 (23 вида)", userData="c06")
         self._combo_classifier.currentIndexChanged.connect(self._on_combo_classifier_changed)
         cls_layout.addWidget(self._combo_classifier)
 
@@ -224,14 +226,43 @@ class DetectionFilterPanel(QWidget):
         self._block_signals = False
 
     def load_classes_from_file(self, classes_path: Path) -> None:
-        """Load and display classes from JSON file, updating default thresholds if provided."""
-        from geo_weed_station.core.onnx_detector import load_model_metadata
+        """Load and display classes for current mode using JSON file metadata and thresholds."""
+        self.load_classes_for_mode(
+            cls_type=self.selected_classifier_type(),
+            classes_path=classes_path,
+            update_thresholds=True,
+        )
 
-        meta = load_model_metadata(classes_path)
-        self.set_classes(list(meta.classes.values()))
+    def load_classes_for_mode(
+        self,
+        cls_type: str | None = None,
+        classes_path: Path | None = None,
+        *,
+        update_thresholds: bool = True,
+    ) -> None:
+        """Populate base classes according to active classifier mode ('none', 'c07', 'c06') and detector metadata."""
+        from geo_weed_station.core.onnx_detector import (
+            get_classifier_class_names,
+            load_model_metadata,
+        )
 
-        # Update thresholds if specified in model metadata
-        if meta.confidence_threshold is not None or meta.nms_iou_threshold is not None:
+        active_cls = (cls_type if cls_type is not None else self.selected_classifier_type()).lower().strip()
+        meta = None
+        if classes_path is not None and Path(classes_path).is_file():
+            meta = load_model_metadata(Path(classes_path))
+
+        if active_cls in ("c07", "c06"):
+            base_names = get_classifier_class_names(active_cls)
+        elif meta is not None:
+            base_names = list(meta.classes.values())
+        else:
+            base_names = []
+
+        self.set_classes(base_names, preserve_hidden=False)
+
+        if update_thresholds and meta is not None and (
+            meta.confidence_threshold is not None or meta.nms_iou_threshold is not None
+        ):
             self._block_signals = True
             if meta.confidence_threshold is not None:
                 conf = max(0.0, min(1.0, float(meta.confidence_threshold)))
@@ -242,23 +273,82 @@ class DetectionFilterPanel(QWidget):
                 self._spin_iou.setValue(iou)
                 self._slider_iou.setValue(int(round(iou * 100)))
             self._block_signals = False
-            self._emit_filter_changed()
 
-    def set_classes(self, names: Sequence[str]) -> None:
-        """Populate the list of classes, preserving unchecked state for known names."""
-        self._class_names = list(names)
+        self._emit_filter_changed()
+
+    def set_classes(self, names: Sequence[str], *, preserve_hidden: bool = True) -> None:
+        """Populate the base list of classes, pruning stale hidden classes."""
+        from geo_weed_station.core.onnx_detector import is_background_class
+
+        clean_names: list[str] = []
+        seen: set[str] = set()
+        for name in names:
+            if name and not is_background_class(name) and name not in seen:
+                clean_names.append(name)
+                seen.add(name)
+
+        self._base_classes = list(clean_names)
+        self._extra_classes = []
+        self._class_names = list(self._base_classes)
+        if preserve_hidden:
+            self._hidden_classes &= set(self._class_names)
+        else:
+            self._hidden_classes.clear()
+
+        self._rebuild_class_list_widget()
+
+    def append_extra_classes(self, extra_names: Iterable[str]) -> bool:
+        """Append non-standard classes (e.g. from preloaded annotations) after base model classes."""
+        from geo_weed_station.core.onnx_detector import is_background_class
+
+        cls_type = self.selected_classifier_type()
+        known = set(self._base_classes) | set(self._extra_classes)
+        new_extras: list[str] = []
+        for raw_name in sorted({str(n).strip() for n in extra_names if n}):
+            if not raw_name or is_background_class(raw_name):
+                continue
+            if cls_type in ("c07", "c06") and raw_name.lower() == "plant":
+                continue
+            if raw_name not in known:
+                new_extras.append(raw_name)
+                known.add(raw_name)
+
+        if not new_extras:
+            return False
+
+        self._extra_classes.extend(new_extras)
+        self._class_names = list(self._base_classes) + list(self._extra_classes)
+        self._rebuild_class_list_widget()
+        return True
+
+    def reset_extra_classes(self) -> None:
+        """Remove any dynamically appended extra classes, restoring only the active base classes."""
+        if not self._extra_classes:
+            return
+        self._extra_classes = []
+        self._class_names = list(self._base_classes)
+        self._hidden_classes &= set(self._class_names)
+        self._rebuild_class_list_widget()
+
+    def _rebuild_class_list_widget(self) -> None:
+        """Rebuild QListWidget items from _class_names while keeping check states."""
         self._block_signals = True
-        self._list_classes.clear()
-
-        for name in self._class_names:
-            item = QListWidgetItem(name, self._list_classes)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            if name in self._hidden_classes:
-                item.setCheckState(Qt.CheckState.Unchecked)
-            else:
-                item.setCheckState(Qt.CheckState.Checked)
-
-        self._block_signals = False
+        self._list_classes.blockSignals(True)
+        self._list_classes.setUpdatesEnabled(False)
+        try:
+            self._list_classes.clear()
+            for name in self._class_names:
+                item = QListWidgetItem(name)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                if name in self._hidden_classes:
+                    item.setCheckState(Qt.CheckState.Unchecked)
+                else:
+                    item.setCheckState(Qt.CheckState.Checked)
+                self._list_classes.addItem(item)
+        finally:
+            self._list_classes.setUpdatesEnabled(True)
+            self._list_classes.blockSignals(False)
+            self._block_signals = False
 
     def current_state(self) -> DetectionFilterState:
         """Return current filter configuration."""

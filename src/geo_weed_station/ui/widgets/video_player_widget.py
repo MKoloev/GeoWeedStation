@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from geo_weed_station.core.onnx_detector import is_background_class
 from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.ui.widgets.detection_filter_panel import DetectionFilterState
 from geo_weed_station.ui.widgets.image_viewer import CLASS_COLORS
@@ -108,7 +109,7 @@ class VideoFrameCanvas(QWidget):
         for weed in self._detections:
             if weed.confidence < self._filter_state.min_confidence:
                 continue
-            if weed.class_name in self._filter_state.hidden_classes:
+            if weed.class_name in self._filter_state.hidden_classes or is_background_class(weed.class_name):
                 continue
 
             color = CLASS_COLORS[weed.class_id % len(CLASS_COLORS)]

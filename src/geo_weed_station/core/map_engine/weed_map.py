@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from geo_weed_station.config.settings import MapSettings
+from geo_weed_station.core.onnx_detector import is_background_class
 from geo_weed_station.core.map_engine.coordinates import CoordinateConverter
 from geo_weed_station.core.map_engine.deduplication import deduplicate_weeds
 from geo_weed_station.core.map_engine.errors import GeoreferenceMissingError
@@ -98,6 +99,71 @@ class MapEngine:
         self._current_grid: HeatmapGrid | None = None
         self._wgs84_origin: tuple[float, float] | None = None
         self._converter: CoordinateConverter | None = None
+        self._hidden_classes: frozenset[str] = frozenset()
+        self._min_confidence: float = 0.0
+
+    @property
+    def hidden_classes(self) -> frozenset[str]:
+        """Set of weed class names currently hidden by user filter."""
+        return self._hidden_classes
+
+    @property
+    def min_confidence(self) -> float:
+        """Minimum confidence threshold currently applied by user filter."""
+        return self._min_confidence
+
+    def set_filter(
+        self,
+        hidden_classes: Iterable[str] = (),
+        min_confidence: float = 0.0,
+    ) -> None:
+        """Update active class and confidence filter for map points, heatmap, zones, and statistics."""
+        new_hidden = frozenset(hidden_classes)
+        new_conf = max(0.0, min(1.0, float(min_confidence)))
+        if new_hidden != self._hidden_classes or abs(new_conf - self._min_confidence) > 1e-6:
+            self._hidden_classes = new_hidden
+            self._min_confidence = new_conf
+            self._current_grid = None
+
+    def filtered_points(
+        self,
+        hidden_classes: Iterable[str] | None = None,
+        min_confidence: float | None = None,
+    ) -> list[WeedPoint]:
+        """Return ingested weed points filtered by hidden classes, background exclusion, and confidence."""
+        active_hidden = (
+            frozenset(hidden_classes) if hidden_classes is not None else self._hidden_classes
+        )
+        active_conf = (
+            float(min_confidence) if min_confidence is not None else self._min_confidence
+        )
+        return [
+            pt
+            for pt in self.weed_map.points
+            if not is_background_class(pt.class_name)
+            and pt.class_name not in active_hidden
+            and pt.confidence >= active_conf
+        ]
+
+    def filtered_deduplicated_points(
+        self,
+        radius_m: float = 0.35,
+        match_classes: bool = True,
+    ) -> list[WeedPoint]:
+        """Return spatially deduplicated weed points after applying the active filter."""
+        return deduplicate_weeds(
+            self.filtered_points(),
+            radius_m=radius_m,
+            match_classes=match_classes,
+        )
+
+    def filtered_weed_map(self) -> WeedMap:
+        """Return a WeedMap view containing only visible filtered points alongside footprints and zones."""
+        wm = WeedMap(coord_system=self.weed_map.coord_system)
+        wm.points = self.filtered_points()
+        wm.footprints = list(self.weed_map.footprints)
+        wm.prescription_zones = list(self.weed_map.prescription_zones)
+        return wm
 
     @property
     def wgs84_origin(self) -> tuple[float, float] | None:
@@ -248,11 +314,12 @@ class MapEngine:
         return all_new_points
 
     def build_heatmap(self, cell_m: float | None = None) -> HeatmapGrid:
-        """Compute raster weed density heatmap using configured algorithm."""
+        """Compute raster weed density heatmap using configured algorithm and active filter."""
         cell_size = cell_m if cell_m is not None else self.settings.heatmap_cell_m
         bounds = self.weed_map.bounds()
+        pts = self.filtered_points()
         self._current_grid = self.heatmap_algo.compute(
-            self.weed_map.points, cell_m=cell_size, bounds=bounds
+            pts, cell_m=cell_size, bounds=bounds
         )
         return self._current_grid
 
@@ -264,9 +331,10 @@ class MapEngine:
         if self._current_grid is None:
             self.build_heatmap()
 
+        pts = self.filtered_points()
         zones = generate_prescription_zones(
             self._current_grid,
-            self.weed_map.points,
+            pts,
             threshold=crit_thresh,
             min_area_m2=min_area_m2,
             converter=self._converter,
@@ -275,9 +343,10 @@ class MapEngine:
         return zones
 
     def statistics(self) -> MapStatistics:
-        """Calculate aggregated field metrics and critical density percentage."""
+        """Calculate aggregated field metrics and critical density percentage for visible points."""
+        pts = self.filtered_points()
         return calculate_statistics(
-            self.weed_map.points,
+            pts,
             grid=self._current_grid,
             critical_threshold=self.settings.critical_density_threshold,
         )

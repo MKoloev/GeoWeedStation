@@ -295,11 +295,16 @@ class SettingsDialog(QDialog):
                 reconnect_backoff_initial_s=self.spin_backoff_init.value(),
                 reconnect_backoff_max_s=self.spin_backoff_max.value(),
             )
+            init_det = self._initial_settings.detector
             det = DetectorSettings(
                 model_path=Path(self.edit_model_path.text()),
                 classes_path=Path(self.edit_classes_path.text()),
+                classifier_type=init_det.classifier_type,
+                classifier_path=init_det.classifier_path,
                 confidence_threshold=self.spin_conf_thresh.value(),
                 nms_iou_threshold=self.spin_iou_thresh.value(),
+                input_size=init_det.input_size,
+                classifier_input_size=init_det.classifier_input_size,
                 video_frame_skip=self.spin_frame_skip.value(),
             )
             map_s = MapSettings(

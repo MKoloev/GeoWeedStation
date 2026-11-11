@@ -34,6 +34,7 @@ class VideoWorker(ManagedWorker):
         super().__init__(parent)
         self._detector_factory = detector_factory
         self._detector: BaseDetector | None = None
+        self._reload_detector: bool = False
         self._cap: cv2.VideoCapture | None = None
         self._total = 0
         self._fps = 25.0
@@ -63,6 +64,14 @@ class VideoWorker(ManagedWorker):
                 self._cap = None
 
     def _ensure_detector(self) -> BaseDetector | None:
+        if self._reload_detector:
+            self._reload_detector = False
+            if self._detector is not None:
+                try:
+                    self._detector.close()
+                except Exception:
+                    pass
+                self._detector = None
         if self._detector is None and self._detector_factory is not None:
             detector = self._detector_factory()
             detector.load()
@@ -71,7 +80,7 @@ class VideoWorker(ManagedWorker):
 
     def _step(self, force_inference: bool = False) -> bool:
         """Decode one frame and emit it. Returns False at end of stream."""
-        if self._cap is None:
+        if self._cap is None or self.is_stop_requested:
             return False
         ok, frame = self._cap.read()
         if not ok or frame is None:
@@ -105,8 +114,12 @@ class VideoWorker(ManagedWorker):
     @Slot(str)
     def open(self, path: str) -> None:
         """Open a video file and show its first frame."""
+        if self.is_stop_requested:
+            return
         if self.thread() != QThread.currentThread():
             QMetaObject.invokeMethod(self, "open", Qt.ConnectionType.QueuedConnection, Q_ARG(str, str(path)))
+            return
+        if self.is_stop_requested:
             return
         self._timer.stop()
         self._release_capture()
@@ -167,12 +180,15 @@ class VideoWorker(ManagedWorker):
     def set_detector_factory(self, factory: Callable[[], BaseDetector] | None) -> None:
         """Update detector factory dynamically and reload detector on next step."""
         self._detector_factory = factory
-        if self._detector is not None:
-            try:
-                self._detector.close()
-            except Exception:
-                pass
-            self._detector = None
+        if self.thread() == QThread.currentThread():
+            if self._detector is not None:
+                try:
+                    self._detector.close()
+                except Exception:
+                    pass
+                self._detector = None
+        else:
+            self._reload_detector = True
         self._last_dets = []
 
     @Slot()
@@ -185,6 +201,8 @@ class VideoWorker(ManagedWorker):
             if self._detector is not None:
                 self._detector.close()
                 self._detector = None
+            if self.is_stop_requested:
+                self.finished.emit()
 
     @Slot()
     def _tick(self) -> None:
