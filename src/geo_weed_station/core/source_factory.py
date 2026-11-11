@@ -20,6 +20,14 @@ from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
 
 IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff"})
 VIDEO_EXTENSIONS = frozenset({".mp4", ".avi", ".mov", ".mkv"})
+REPORT_SUBDIRS = frozenset({"report", "reports", "export", "exports"})
+IGNORED_REPORT_FILENAMES = frozenset(
+    {
+        "detection_report.png",
+        "weed_map_export.png",
+        "map_heatmap.png",
+    }
+)
 
 SourceKind = Literal["image", "folder", "video", "drone_run"]
 
@@ -33,12 +41,31 @@ class FrameSource(Protocol):
     def load(self, entry: FileEntry) -> FramePayload: ...
 
 
+def _is_report_artifact(path: Path, root: Path) -> bool:
+    """Return True if path is inside a report/export subfolder or is a generated report PNG."""
+    try:
+        rel_parts = path.relative_to(root).parts[:-1]
+        if any(part.lower() in REPORT_SUBDIRS for part in rel_parts):
+            return True
+    except ValueError:
+        pass
+    name_lower = path.name.lower()
+    if name_lower in IGNORED_REPORT_FILENAMES:
+        return True
+    if path.suffix.lower() == ".png" and path.stem.lower().endswith("_report"):
+        return True
+    return False
+
+
 def scan_images(root: Path) -> list[Path]:
-    """Recursively list supported image files in deterministic order."""
+    """Recursively list supported image files in deterministic order, excluding report subfolders."""
     root = Path(root)
     found = [
-        p for p in root.rglob("*")
-        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        p
+        for p in root.rglob("*")
+        if p.is_file()
+        and p.suffix.lower() in IMAGE_EXTENSIONS
+        and not _is_report_artifact(p, root)
     ]
     return sorted(found, key=lambda p: str(p).lower())
 

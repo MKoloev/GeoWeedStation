@@ -73,6 +73,34 @@ def test_export_dialog_validation_no_formats(tmp_path, qtbot):
     assert not dialog.lbl_error.isVisible()
 
 
+def test_export_dialog_report_mode_without_georef(tmp_path, qtbot):
+    dialog = ExportDialog(
+        default_dir=tmp_path,
+        report_mode=True,
+        has_georef=False,
+    )
+    qtbot.addWidget(dialog)
+
+    # In report_mode without georef, HTML/JSON/FramesCSV/CSV/ZIP are checked, GeoJSON/PNG disabled
+    assert dialog.cb_html.isChecked()
+    assert dialog.cb_json.isChecked()
+    assert dialog.cb_frames_csv.isChecked()
+    assert dialog.cb_csv.isChecked()
+    assert dialog.cb_zip.isChecked()
+    assert not dialog.cb_geojson.isChecked()
+    assert not dialog.cb_geojson.isEnabled()
+    assert not dialog.cb_png.isChecked()
+    assert not dialog.cb_png.isEnabled()
+
+    dialog._on_accept()
+    req = dialog.result_request()
+    assert ExportFormat.HTML_REPORT in req.formats
+    assert ExportFormat.SUMMARY_JSON in req.formats
+    assert ExportFormat.FRAMES_CSV in req.formats
+    assert ExportFormat.ZIP_BUNDLE in req.formats
+    assert ExportFormat.GEOJSON not in req.formats
+
+
 def test_confirm_dialog(monkeypatch):
     # Test delete confirmation
     monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)

@@ -144,6 +144,8 @@ def deduplicate_weeds(
             best_frame_id=best_pt.best_frame_id or best_pt.source_frame,
             bbox=best_pt.bbox,
             duplicate_count=len(cluster_points),
+            stage_name=best_pt.stage_name,
+            class_prob=best_pt.class_prob,
         )
         unique_points.append(unique_pt)
 

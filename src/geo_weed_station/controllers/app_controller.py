@@ -75,6 +75,7 @@ class AppController(QObject):
             window=self.window,
             map_ctrl=self.map_controller,
             settings=self.settings,
+            offline_ctrl=self.offline_controller,
             parent=self,
         )
 

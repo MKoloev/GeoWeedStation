@@ -46,6 +46,22 @@ def test_folder_recursive_scan_extensions(tmp_path: Path):
     assert names == ["a.jpg", "b.JPEG", "c.png", "d.tif", "e.tiff"]
 
 
+def test_folder_scan_ignores_report_subfolder_and_report_pngs(tmp_path: Path):
+    make_real_jpeg(tmp_path / "frame_01.jpg")
+    # Report subfolder with PNG map inside the images directory
+    report_dir = tmp_path / "report"
+    report_dir.mkdir()
+    (report_dir / "detection_report.png").write_bytes(b"png")
+    (report_dir / "custom_map.png").write_bytes(b"png")
+    # Legacy report PNG in root folder
+    (tmp_path / "detection_report.png").write_bytes(b"png")
+    (tmp_path / "weed_map_export.png").write_bytes(b"png")
+
+    entries = SourceFactory.create("folder", tmp_path).entries()
+    names = [Path(e.path).name for e in entries]
+    assert names == ["frame_01.jpg"]
+
+
 def test_image_load_uses_embedded_xmp(tmp_path: Path):
     img = make_real_jpeg(tmp_path / "a.jpg", SAMPLE_XMP_LOCAL_ARUCO)
     src = SourceFactory.create("image", img)

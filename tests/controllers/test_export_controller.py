@@ -109,3 +109,139 @@ def test_export_successful_execution(test_setup, monkeypatch, qtbot):
     assert (export_target / "my_field.csv").exists()
     assert (export_target / "my_field.geojson").exists()
     assert (export_target / "my_field.png").exists()
+
+
+def test_export_report_succeeds_even_when_map_locked(tmp_path, monkeypatch, qtbot):
+    from geo_weed_station.controllers.offline_controller import OfflineController
+    from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
+
+    settings = AppSettings(
+        map=MapSettings(heatmap_cell_m=1.0),
+        workdir=tmp_path / "workdir",
+    )
+    engine = MapEngine(projector=NadirProjector(), settings=settings.map)
+    map_ctrl = MapController(engine=engine)
+    qset = QSettings(str(tmp_path / "ui.ini"), QSettings.IniFormat)
+    window = MainWindow(qsettings=qset)
+    offline_ctrl = OfflineController(window=window, map_ctrl=map_ctrl, settings=settings)
+    export_ctrl = ExportController(
+        window=window,
+        map_ctrl=map_ctrl,
+        settings=settings,
+        offline_ctrl=offline_ctrl,
+    )
+
+    # Simulate locked map (no XMP georef), but offline controller has a processed image
+    map_ctrl.on_frame(
+        FramePayload(frame_id="no_xmp", image_size_px=(100, 100), pose=None, detections=[])
+    )
+    assert map_ctrl.is_locked
+
+    img_path = tmp_path / "img_01.jpg"
+    img_path.write_bytes(b"img")
+    entry = FileEntry(
+        path=str(img_path),
+        size_bytes=123,
+        status=ProcessingStatus.NO_METADATA,
+        has_xmp=False,
+        detections_count=1,
+    )
+    offline_ctrl.file_list_panel.set_entries([entry])
+    offline_ctrl._detections_by_path[str(img_path)] = [
+        DetectedWeed(
+            weed_id="w1",
+            class_id=1,
+            class_name="Вьюнок",
+            confidence=0.9,
+            bbox=BBox(x=0.1, y=0.1, w=0.2, h=0.2),
+            stage_name="всходы",
+            class_prob=0.88,
+        )
+    ]
+
+    report_dir = tmp_path / "report_out"
+    mock_request = ExportRequest(
+        formats={
+            ExportFormat.HTML_REPORT,
+            ExportFormat.SUMMARY_JSON,
+            ExportFormat.FRAMES_CSV,
+            ExportFormat.CSV,
+            ExportFormat.ZIP_BUNDLE,
+        },
+        target_dir=report_dir,
+        base_name="folder_rep",
+    )
+    monkeypatch.setattr(ExportDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(ExportDialog, "result_request", lambda self: mock_request)
+
+    completed_dirs = []
+    export_ctrl.export_completed.connect(completed_dirs.append)
+
+    # Trigger via button click on FileListPanel
+    offline_ctrl.file_list_panel.btn_export_report.click()
+
+    assert completed_dirs == [str(report_dir)]
+    assert (report_dir / "folder_rep.html").is_file()
+    assert (report_dir / "folder_rep_report.json").is_file()
+    assert (report_dir / "folder_rep_frames.csv").is_file()
+    assert (report_dir / "folder_rep.csv").is_file()
+    assert (report_dir / "folder_rep_report.zip").is_file()
+
+
+def test_export_report_creates_separate_report_subfolder_inside_image_folder(tmp_path, monkeypatch, qtbot):
+    from geo_weed_station.controllers.offline_controller import OfflineController
+    from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
+
+    images_dir = tmp_path / "field_images"
+    images_dir.mkdir()
+    img_path = images_dir / "img_01.jpg"
+    img_path.write_bytes(b"img")
+
+    settings = AppSettings(
+        map=MapSettings(heatmap_cell_m=1.0),
+        workdir=tmp_path / "workdir",
+    )
+    engine = MapEngine(projector=NadirProjector(), settings=settings.map)
+    map_ctrl = MapController(engine=engine)
+    qset = QSettings(str(tmp_path / "ui.ini"), QSettings.IniFormat)
+    window = MainWindow(qsettings=qset)
+    offline_ctrl = OfflineController(window=window, map_ctrl=map_ctrl, settings=settings)
+    offline_ctrl._current_source_folder = images_dir
+    offline_ctrl.file_list_panel.set_entries(
+        [
+            FileEntry(
+                path=str(img_path),
+                size_bytes=123,
+                status=ProcessingStatus.DONE,
+                has_xmp=False,
+                detections_count=0,
+            )
+        ]
+    )
+    export_ctrl = ExportController(
+        window=window,
+        map_ctrl=map_ctrl,
+        settings=settings,
+        offline_ctrl=offline_ctrl,
+    )
+
+    assert export_ctrl._default_report_dir() == images_dir / "report"
+
+    # Even if user selects images_dir itself, controller redirects output to images_dir / "report"
+    mock_request = ExportRequest(
+        formats={ExportFormat.HTML_REPORT, ExportFormat.SUMMARY_JSON},
+        target_dir=images_dir,
+        base_name="detection_report",
+    )
+    monkeypatch.setattr(ExportDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(ExportDialog, "result_request", lambda self: mock_request)
+
+    completed_dirs = []
+    export_ctrl.export_completed.connect(completed_dirs.append)
+    export_ctrl.export_report()
+
+    expected_subdir = images_dir / "report"
+    assert completed_dirs == [str(expected_subdir)]
+    assert (expected_subdir / "detection_report.html").is_file()
+    assert (expected_subdir / "detection_report_report.json").is_file()
+

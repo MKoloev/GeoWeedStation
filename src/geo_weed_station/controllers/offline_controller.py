@@ -25,6 +25,7 @@ from geo_weed_station.core.onnx_detector import (
     resolve_classes_path,
     scan_available_models,
 )
+from geo_weed_station.core.report_generator import ReportGenerator
 from geo_weed_station.core.source_factory import (
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
@@ -32,11 +33,13 @@ from geo_weed_station.core.source_factory import (
     ImageSource,
 )
 from geo_weed_station.core.xmp_parser import has_xmp
-from geo_weed_station.schemas.entities import DetectedWeed
+from geo_weed_station.schemas.entities import CoordinateSystem, DetectedWeed
 from geo_weed_station.schemas.mission import Waypoint
 from geo_weed_station.schemas.payload import FramePayload
+from geo_weed_station.schemas.report import FolderDetectionReport
 from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
 from geo_weed_station.ui.app_mode import AppMode
+from geo_weed_station.ui.dialogs.export_dialog import ExportDialog, ExportFormat
 from geo_weed_station.ui.main_window import (
     MAP_LOCKED_TEXT,
     TAB_IMAGE,
@@ -165,6 +168,7 @@ class OfflineController(QObject):
         self.file_list_panel.file_selected.connect(self._on_file_selected)
         self.file_list_panel.process_requested.connect(self.start_batch)
         self.file_list_panel.save_annotations_requested.connect(self.save_annotations)
+        self.file_list_panel.export_report_requested.connect(self.export_report)
         self.file_list_panel.cleared.connect(self._on_file_list_cleared)
 
         # Filters & Model selection
@@ -497,6 +501,115 @@ class OfflineController(QObject):
         except Exception as exc:
             logger.exception("Failed to save annotations: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка сохранения разметки: {exc}")
+
+    def build_folder_report(self) -> FolderDetectionReport:
+        """Build a structured FolderDetectionReport for the currently loaded folder/files."""
+        gen = ReportGenerator()
+        return gen.build_report(
+            entries=self.file_list_panel.model.entries,
+            detections_by_path=self._detections_by_path,
+            map_engine=self._map_ctrl.engine,
+            detector_settings=self._settings.detector,
+            source_folder=self._current_source_folder,
+        )
+
+    @Slot()
+    def export_report(self) -> None:
+        """Open report export dialog and save analytical report files to disk."""
+        entries = self.file_list_panel.model.entries
+        points = self._map_ctrl.engine.weed_map.points
+        if not entries and not points:
+            msg = "Нет данных для выгрузки отчета. Сначала откройте и обработайте папку со снимками."
+            logger.info(msg)
+            self._window.status_bar_panel.set_message(msg)
+            return
+
+        has_georef = bool(not self._map_ctrl.is_locked and points)
+        coord_system = self._map_ctrl.engine.weed_map.coord_system or CoordinateSystem.LOCAL_ARUCO
+        if self._current_source_folder is not None:
+            default_dir = (
+                self._current_source_folder
+                if self._current_source_folder.name.lower() in ("report", "reports")
+                else self._current_source_folder / "report"
+            )
+        else:
+            default_dir = self._settings.workdir / "report"
+
+        dialog = ExportDialog(
+            coord_system=coord_system,
+            has_orthophoto=False,
+            default_dir=default_dir,
+            parent=self._window,
+            report_mode=True,
+            has_georef=has_georef,
+        )
+        if dialog.exec() != ExportDialog.DialogCode.Accepted:
+            return
+
+        try:
+            req = dialog.result_request()
+            target_dir = req.target_dir
+            if self._current_source_folder is not None:
+                try:
+                    if target_dir.resolve() == self._current_source_folder.resolve():
+                        target_dir = self._current_source_folder / "report"
+                except OSError:
+                    pass
+            target_dir.mkdir(parents=True, exist_ok=True)
+            report = self.build_folder_report()
+            gen = ReportGenerator()
+
+            if ExportFormat.CSV in req.formats:
+                csv_path = target_dir / f"{req.base_name}.csv"
+                if points:
+                    gen._exporter.export_csv(points, csv_path)
+                else:
+                    gen.export_detections_csv(report, csv_path)
+
+            if ExportFormat.GEOJSON in req.formats and has_georef:
+                gen._exporter.export_geojson(
+                    self._map_ctrl.engine.weed_map,
+                    target_dir / f"{req.base_name}.geojson",
+                    include_zones=True,
+                )
+
+            if ExportFormat.PNG in req.formats and has_georef:
+                grid = self._map_ctrl.engine.build_heatmap()
+                gen._exporter.export_png(
+                    points=self._map_ctrl.engine.weed_map,
+                    output_path=target_dir / f"{req.base_name}.png",
+                    grid=grid,
+                    options=req.png_options,
+                )
+
+            if ExportFormat.HTML_REPORT in req.formats:
+                map_bytes = (
+                    gen.render_map_png_bytes(self._map_ctrl.engine, options=req.png_options)
+                    if has_georef
+                    else None
+                )
+                gen.export_html(report, target_dir / f"{req.base_name}.html", map_png_bytes=map_bytes)
+
+            if ExportFormat.SUMMARY_JSON in req.formats:
+                gen.export_json(report, target_dir / f"{req.base_name}_report.json")
+
+            if ExportFormat.FRAMES_CSV in req.formats:
+                gen.export_frames_csv(report, target_dir / f"{req.base_name}_frames.csv")
+
+            if ExportFormat.ZIP_BUNDLE in req.formats:
+                gen.export_zip_bundle(
+                    report=report,
+                    zip_path=target_dir / f"{req.base_name}_report.zip",
+                    map_engine=self._map_ctrl.engine if has_georef else None,
+                    png_options=req.png_options,
+                )
+
+            success_msg = f"Отчет успешно выгружен в каталог: {target_dir}"
+            logger.info(success_msg)
+            self._window.status_bar_panel.set_message(success_msg)
+        except Exception as exc:
+            logger.exception("Failed to export report: %s", exc)
+            self._window.status_bar_panel.set_message(f"Ошибка выгрузки отчета: {exc}")
 
     @Slot()
     def open_video(self) -> None:

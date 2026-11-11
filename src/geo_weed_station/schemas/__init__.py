@@ -40,6 +40,11 @@ from geo_weed_station.schemas.onboard_api import (
     summary_to_frame_payloads,
 )
 from geo_weed_station.schemas.payload import FramePayload
+from geo_weed_station.schemas.report import (
+    DetectionReportRow,
+    FolderDetectionReport,
+    FrameReportItem,
+)
 from geo_weed_station.schemas.telemetry import (
     ConnectionState,
     DronePose,
@@ -90,4 +95,8 @@ __all__ = [
     "PrescriptionZone",
     "SummaryReport",
     "WeedPoint",
+    # report
+    "DetectionReportRow",
+    "FolderDetectionReport",
+    "FrameReportItem",
 ]

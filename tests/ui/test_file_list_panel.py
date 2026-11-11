@@ -109,6 +109,18 @@ def test_file_list_panel_process_signal(qtbot):
     assert process_signals == [True]
 
 
+def test_file_list_panel_export_report_signal(qtbot):
+    panel = FileListPanel()
+    qtbot.addWidget(panel)
+
+    report_signals = []
+    panel.export_report_requested.connect(lambda: report_signals.append(True))
+
+    assert panel.btn_export_report.text() == "📊 Выгрузить отчет"
+    panel.btn_export_report.click()
+    assert report_signals == [True]
+
+
 def test_file_list_panel_clear(qtbot):
     panel = FileListPanel()
     qtbot.addWidget(panel)

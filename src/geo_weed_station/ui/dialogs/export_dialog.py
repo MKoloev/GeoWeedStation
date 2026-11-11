@@ -32,15 +32,19 @@ logger = logging.getLogger(__name__)
 
 
 class ExportFormat(str, Enum):
-    """Supported export data formats."""
+    """Supported export and report data formats."""
 
     CSV = "csv"
     GEOJSON = "geojson"
     PNG = "png"
+    HTML_REPORT = "html"
+    SUMMARY_JSON = "json"
+    FRAMES_CSV = "frames_csv"
+    ZIP_BUNDLE = "zip"
 
 
 class ExportRequest(BaseModel):
-    """Complete specification of an agronomic map export request."""
+    """Complete specification of an agronomic map or folder detection report export request."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -51,7 +55,7 @@ class ExportRequest(BaseModel):
 
 
 class ExportDialog(QDialog):
-    """Dialog for configuring export formats (CSV, GeoJSON, PNG) and styling options."""
+    """Dialog for configuring export formats (CSV, GeoJSON, PNG, HTML/JSON/ZIP reports) and styling options."""
 
     def __init__(
         self,
@@ -59,10 +63,19 @@ class ExportDialog(QDialog):
         has_orthophoto: bool = False,
         default_dir: Path | None = None,
         parent: QWidget | None = None,
+        *,
+        report_mode: bool = False,
+        has_georef: bool = True,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Экспорт результатов картографирования")
-        self.resize(520, 440)
+        self._report_mode = report_mode
+        self._has_georef = has_georef
+        self.setWindowTitle(
+            "Выгрузка аналитического отчета по детекции"
+            if report_mode
+            else "Экспорт результатов картографирования"
+        )
+        self.resize(560, 540)
 
         self._coord_system = coord_system
         self._has_orthophoto = has_orthophoto
@@ -88,38 +101,79 @@ class ExportDialog(QDialog):
         row_dir.addWidget(btn_browse_dir)
         target_layout.addRow("Каталог экспорта:", row_dir)
 
-        self.edit_name = QLineEdit("weed_map_export", target_group)
+        default_base = "detection_report" if self._report_mode else "weed_map_export"
+        self.edit_name = QLineEdit(default_base, target_group)
         target_layout.addRow("Имя файлов (префикс):", self.edit_name)
 
         # Coordinate system notice
-        if self._coord_system == CoordinateSystem.LOCAL_ARUCO:
+        if not self._has_georef:
+            cs_text = "Без геопривязки XMP (доступны аналитические и табличные отчеты по кадрам)"
+            cs_style = "color: #fcc419; font-weight: bold;"
+        elif self._coord_system == CoordinateSystem.LOCAL_ARUCO:
             cs_text = "Локальная метрическая СК полигона (метры, EPSG:LOCAL)"
+            cs_style = "color: #4dabf7; font-weight: bold;"
         else:
             cs_text = "Глобальная географическая система координат WGS84 (EPSG:4326)"
-        lbl_cs = QLabel(cs_text, target_group)
-        lbl_cs.setStyleSheet("color: #4dabf7; font-weight: bold;")
-        target_layout.addRow("Система координат:", lbl_cs)
+            cs_style = "color: #4dabf7; font-weight: bold;"
+        self.lbl_cs = QLabel(cs_text, target_group)
+        self.lbl_cs.setStyleSheet(cs_style)
+        target_layout.addRow("Система координат:", self.lbl_cs)
 
         main_layout.addWidget(target_group)
 
         # 2. Formats checkboxes
-        formats_group = QGroupBox("Выбор форматов данных", self)
+        formats_group = QGroupBox("Выбор форматов данных и отчета", self)
         formats_layout = QVBoxLayout(formats_group)
 
-        self.cb_csv = QCheckBox("Таблица сорняков CSV (X, Y, класс, confidence)", formats_group)
+        self.cb_csv = QCheckBox(
+            "Таблица детекций сорняков CSV (объекты, классы, стадии, координаты)", formats_group
+        )
         self.cb_csv.setChecked(True)
         self.cb_csv.toggled.connect(self._validate_inputs)
         formats_layout.addWidget(self.cb_csv)
 
         self.cb_geojson = QCheckBox("Векторный геопространственный слой GeoJSON", formats_group)
-        self.cb_geojson.setChecked(True)
+        self.cb_geojson.setChecked(self._has_georef)
+        self.cb_geojson.setEnabled(self._has_georef)
         self.cb_geojson.toggled.connect(self._validate_inputs)
         formats_layout.addWidget(self.cb_geojson)
 
         self.cb_png = QCheckBox("Растровая тепловая карта высокого разрешения (PNG)", formats_group)
-        self.cb_png.setChecked(True)
+        self.cb_png.setChecked(self._has_georef)
+        self.cb_png.setEnabled(self._has_georef)
         self.cb_png.toggled.connect(self._on_png_toggled)
         formats_layout.addWidget(self.cb_png)
+
+        self.cb_html = QCheckBox(
+            "Аналитический отчет HTML (сводка, виды и стадии, карта, таблицы для печати)",
+            formats_group,
+        )
+        self.cb_html.setChecked(self._report_mode)
+        self.cb_html.toggled.connect(self._validate_inputs)
+        formats_layout.addWidget(self.cb_html)
+
+        self.cb_json = QCheckBox(
+            "Структурированный JSON-отчет (полная статистика, кадры и зоны)", formats_group
+        )
+        self.cb_json.setChecked(self._report_mode)
+        self.cb_json.toggled.connect(self._validate_inputs)
+        formats_layout.addWidget(self.cb_json)
+
+        self.cb_frames_csv = QCheckBox(
+            "Покадровая ведомость снимков CSV (статусы, XMP, число детекций по кадрам)",
+            formats_group,
+        )
+        self.cb_frames_csv.setChecked(self._report_mode)
+        self.cb_frames_csv.toggled.connect(self._validate_inputs)
+        formats_layout.addWidget(self.cb_frames_csv)
+
+        self.cb_zip = QCheckBox(
+            "Единый ZIP-архив отчета (включает HTML, JSON, CSV и картографические слои)",
+            formats_group,
+        )
+        self.cb_zip.setChecked(self._report_mode)
+        self.cb_zip.toggled.connect(self._validate_inputs)
+        formats_layout.addWidget(self.cb_zip)
 
         main_layout.addWidget(formats_group)
 
@@ -146,12 +200,17 @@ class ExportDialog(QDialog):
         self.cb_scalebar.setChecked(True)
         png_layout.addRow("Масштаб:", self.cb_scalebar)
 
+        self.cb_route = QCheckBox("Маршрут полёта (линия пути, старт и финиш)", self.png_group)
+        self.cb_route.setChecked(True)
+        png_layout.addRow("Маршрут:", self.cb_route)
+
         self.spin_dpi = QSpinBox(self.png_group)
         self.spin_dpi.setRange(72, 1200)
         self.spin_dpi.setValue(300)
         self.spin_dpi.setSuffix(" DPI")
         png_layout.addRow("Разрешение печати:", self.spin_dpi)
 
+        self.png_group.setEnabled(self.cb_png.isChecked())
         main_layout.addWidget(self.png_group)
 
         # 4. Error message banner
@@ -189,11 +248,29 @@ class ExportDialog(QDialog):
         self.png_group.setEnabled(checked)
         self._validate_inputs()
 
+    def _selected_formats(self) -> set[ExportFormat]:
+        formats: set[ExportFormat] = set()
+        if self.cb_csv.isChecked():
+            formats.add(ExportFormat.CSV)
+        if self.cb_geojson.isChecked():
+            formats.add(ExportFormat.GEOJSON)
+        if self.cb_png.isChecked():
+            formats.add(ExportFormat.PNG)
+        if self.cb_html.isChecked():
+            formats.add(ExportFormat.HTML_REPORT)
+        if self.cb_json.isChecked():
+            formats.add(ExportFormat.SUMMARY_JSON)
+        if self.cb_frames_csv.isChecked():
+            formats.add(ExportFormat.FRAMES_CSV)
+        if self.cb_zip.isChecked():
+            formats.add(ExportFormat.ZIP_BUNDLE)
+        return formats
+
     def _validate_inputs(self) -> bool:
         ok_btn = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
 
         # 1. At least one format must be selected
-        has_fmt = self.cb_csv.isChecked() or self.cb_geojson.isChecked() or self.cb_png.isChecked()
+        has_fmt = bool(self._selected_formats())
         if not has_fmt:
             self._show_error("Выберите хотя бы один формат для экспорта.")
             if ok_btn:
@@ -234,21 +311,16 @@ class ExportDialog(QDialog):
         if not self._validate_inputs():
             return
 
-        formats: set[ExportFormat] = set()
-        if self.cb_csv.isChecked():
-            formats.add(ExportFormat.CSV)
-        if self.cb_geojson.isChecked():
-            formats.add(ExportFormat.GEOJSON)
-        if self.cb_png.isChecked():
-            formats.add(ExportFormat.PNG)
+        formats = self._selected_formats()
 
         png_opts: PngExportOptions | None = None
-        if ExportFormat.PNG in formats:
+        if ExportFormat.PNG in formats or ExportFormat.ZIP_BUNDLE in formats or ExportFormat.HTML_REPORT in formats:
             png_opts = PngExportOptions(
                 background=self.combo_bg.currentData(),
                 show_grid=self.cb_grid.isChecked(),
                 show_legend=self.cb_legend.isChecked(),
                 show_scalebar=self.cb_scalebar.isChecked(),
+                show_route=self.cb_route.isChecked(),
                 dpi=self.spin_dpi.value(),
             )
 

@@ -54,6 +54,8 @@ class WeedMap:
         xs = [p.x for p in self.points]
         ys = [p.y for p in self.points]
         for fp in self.footprints:
+            xs.append(fp.center_x)
+            ys.append(fp.center_y)
             for cx, cy in fp.polygon:
                 xs.append(cx)
                 ys.append(cy)
@@ -163,6 +165,8 @@ class MapEngine:
                     lon=round(weed_lon, 8),
                     bbox=det.bbox,
                     best_frame_id=payload.frame_id,
+                    stage_name=det.stage_name,
+                    class_prob=det.class_prob,
                 )
             else:
                 wp = WeedPoint(
@@ -175,6 +179,8 @@ class MapEngine:
                     source_frame=payload.frame_id,
                     bbox=det.bbox,
                     best_frame_id=payload.frame_id,
+                    stage_name=det.stage_name,
+                    class_prob=det.class_prob,
                 )
             new_points.append(wp)
 

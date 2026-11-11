@@ -50,6 +50,8 @@ class WeedPoint(BaseModel):
     best_source_frame: str | None = None
     best_frame_id: str | None = None
     duplicate_count: int = 1
+    stage_name: str | None = None
+    class_prob: float | None = None
 
 
 class PrescriptionZone(BaseModel):
@@ -142,5 +144,6 @@ class PngExportOptions(BaseModel):
     show_grid: bool = True
     show_legend: bool = True
     show_scalebar: bool = True
+    show_route: bool = True
     dpi: int = 300
     orthophoto_path: Path | None = None

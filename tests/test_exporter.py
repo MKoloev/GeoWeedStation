@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from geo_weed_station.core.map_engine.exporter import MapExporter
+from geo_weed_station.core.map_engine.exporter import MapExporter, _extract_route_coords
 from geo_weed_station.core.map_engine.heatmap import CountHeatmap
 from geo_weed_station.core.map_engine.weed_map import WeedMap
 from geo_weed_station.schemas.entities import CoordinateSystem
-from geo_weed_station.schemas.map_models import PngExportOptions, WeedPoint
+from geo_weed_station.schemas.map_models import FrameFootprint, PngExportOptions, WeedPoint
 
 
 @pytest.fixture
@@ -124,3 +124,48 @@ def test_export_to_png_white_and_transparent(sample_weed_map: WeedMap, tmp_path:
     assert img_t.mode == "RGBA"
     # Corner pixel should be completely transparent (alpha = 0)
     assert img_t.getpixel((5, 5))[3] == 0
+
+
+def test_export_to_png_renders_route_start_and_finish(sample_weed_map: WeedMap, tmp_path: Path):
+    """Verify flight route trajectory, start line/marker, and finish line/marker on PNG."""
+    for idx, (cx, cy) in enumerate([(0.5, 0.5), (1.5, 1.2), (2.8, 2.0)], start=1):
+        sample_weed_map.add_footprint(
+            FrameFootprint(
+                frame_id=f"frame_{idx:02d}",
+                center_x=cx,
+                center_y=cy,
+                width_m=1.0,
+                height_m=0.8,
+                altitude_m=2.0,
+                yaw_deg=0.0,
+                polygon=[(cx - 0.5, cy - 0.4), (cx + 0.5, cy - 0.4), (cx + 0.5, cy + 0.4), (cx - 0.5, cy + 0.4)],
+            )
+        )
+
+    coords = _extract_route_coords(sample_weed_map)
+    assert coords == [(0.5, 0.5), (1.5, 1.2), (2.8, 2.0)]
+
+    exporter = MapExporter()
+    png_with_route = tmp_path / "map_with_route.png"
+    png_no_route = tmp_path / "map_no_route.png"
+
+    exporter.to_png(
+        sample_weed_map,
+        None,
+        png_with_route,
+        options=PngExportOptions(background="white", show_grid=False, show_legend=True, show_route=True),
+    )
+    exporter.to_png(
+        sample_weed_map,
+        None,
+        png_no_route,
+        options=PngExportOptions(background="white", show_grid=False, show_legend=True, show_route=False),
+    )
+
+    assert png_with_route.exists()
+    assert png_no_route.exists()
+    # Rendered pixels must differ when route + start/finish gates are drawn
+    img_route = Image.open(png_with_route)
+    img_plain = Image.open(png_no_route)
+    assert img_route.tobytes() != img_plain.tobytes()
+
