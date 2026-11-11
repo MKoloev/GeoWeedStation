@@ -201,3 +201,44 @@ def test_online_controller_ssh_summary_loaded_to_map(online_setup, tmp_path):
     ctrl._on_ssh_summary_downloaded(str(summary_file))
     assert len(map_ctrl.engine.weed_map.points) > 0
 
+
+def test_online_controller_ssh_summary_zero_altitude_locks_map_and_warns(online_setup, tmp_path):
+    """When SSH summary.json has altitude_m=0, map locks and warning is logged."""
+    import json
+    from unittest.mock import patch
+
+    ctrl, map_ctrl, _window, _canvas, _ = online_setup
+
+    summary_file = tmp_path / "summary.json"
+    summary_data = {
+        "run_id": "run_zero_alt",
+        "coordinate_system": "aruco_local",
+        "detections_count": 1,
+        "items": [
+            {
+                "wp_index": 0,
+                "timestamp": 1234567.89,
+                "camera_x": 0.0,
+                "camera_y": 0.0,
+                "altitude_m": 0.0,
+                "detections": [
+                    {
+                        "class_name": "weed",
+                        "confidence": 0.95,
+                        "bbox_px": [100, 100, 200, 200],
+                    }
+                ],
+            }
+        ],
+    }
+    summary_file.write_text(json.dumps(summary_data), encoding="utf-8")
+
+    with patch.object(ctrl.mission_control, "append_log", wraps=ctrl.mission_control.append_log) as mock_log:
+        ctrl._on_ssh_summary_downloaded(str(summary_file))
+
+    assert map_ctrl.is_locked is True
+    assert len(map_ctrl.engine.weed_map.points) == 0
+    logged = "\n".join(str(call.args[0]) for call in mock_log.call_args_list)
+    assert "заблокирована" in logged.lower()
+    assert "--fallback-telemetry-altitude" in logged
+

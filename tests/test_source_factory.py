@@ -14,6 +14,7 @@ from geo_weed_station.core.source_factory import (
     ImageSource,
     SourceFactory,
     VideoSource,
+    load_image_payload,
 )
 from geo_weed_station.schemas.mission import Waypoint
 from tests.helpers.make_media import make_mp4, make_real_jpeg
@@ -121,3 +122,21 @@ def test_drone_run_broken_summary_is_ignored(tmp_path: Path):
     make_real_jpeg(tmp_path / "wp_0000.jpg", SAMPLE_XMP_LOCAL_ARUCO)
     src = SourceFactory.create("drone_run", tmp_path)
     assert len(src.load(src.entries()[0]).detections) == 0
+
+
+def test_load_image_payload_scales_principal_point_when_downscaled(tmp_path: Path):
+    """When read_image downscales >8000x6000 images, principal_point_px scales proportionally."""
+    xmp = SAMPLE_XMP_LOCAL_ARUCO.replace(
+        'Camera:PrincipalPoint="1280.0,960.0"',
+        'Camera:PrincipalPoint="4096.0,3072.0"',
+    )
+    big_img = make_real_jpeg(tmp_path / "big_50mp.jpg", xmp_xml=xmp, size=(8192, 6144))
+
+    payload_meta = load_image_payload(big_img, load_pixels=False)
+    assert payload_meta.image_size_px == (8192, 6144)
+    assert payload_meta.optics.principal_point_px == pytest.approx((4096.0, 3072.0))
+
+    payload_px = load_image_payload(big_img, load_pixels=True)
+    assert payload_px.image_size_px == (8000, 6000)
+    assert payload_px.optics.principal_point_px[0] == pytest.approx(4000.0, abs=0.5)
+    assert payload_px.optics.principal_point_px[1] == pytest.approx(3000.0, abs=0.5)

@@ -83,7 +83,9 @@ class SshSettings(BaseModel):
         '--iou-thresh 0.25 '
         '--conf-thresh 0.6 '
         '--containment-thresh 0.7 '
-        '--core-mask 0_1_2"'
+        '--core-mask 0_1_2 '
+        '--transfer-max-dim 1600 '
+        '--transfer-quality 85"'
     )
 
 

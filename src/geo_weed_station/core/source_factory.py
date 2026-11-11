@@ -85,10 +85,22 @@ def load_image_payload(path: Path, load_pixels: bool = True) -> FramePayload:
     """
     path = Path(path)
     if load_pixels:
+        orig_w, orig_h = get_image_size(path)
         image = read_image(path)
         h, w = image.shape[:2]
         payload = build_frame_payload(path, (w, h))
-        return payload.model_copy(update={"image": image})
+        optics = payload.optics
+        if (
+            optics is not None
+            and optics.principal_point_px is not None
+            and (w, h) != (orig_w, orig_h)
+            and orig_w > 0
+            and orig_h > 0
+        ):
+            pp_x, pp_y = optics.principal_point_px
+            scaled_pp = (pp_x * (w / float(orig_w)), pp_y * (h / float(orig_h)))
+            optics = optics.model_copy(update={"principal_point_px": scaled_pp})
+        return payload.model_copy(update={"image": image, "optics": optics})
     else:
         sz = get_image_size(path)
         return build_frame_payload(path, sz)

@@ -42,7 +42,9 @@ DEFAULT_SSH_COMMAND = (
     '--iou-thresh 0.25 '
     '--conf-thresh 0.6 '
     '--containment-thresh 0.7 '
-    '--core-mask 0_1_2"'
+    '--core-mask 0_1_2 '
+    '--transfer-max-dim 1600 '
+    '--transfer-quality 85"'
 )
 
 
@@ -275,6 +277,68 @@ class SshMissionWorker(ManagedWorker):
                 pass
             return False
 
+    def _collect_remote_files(
+        self,
+        sftp: Any,
+        remote_dir: str,
+        local_dir: Path,
+        *,
+        _rel_prefix: str = "",
+        _depth: int = 0,
+        _max_depth: int = 5,
+    ) -> list[tuple[str, Path, str, int]]:
+        """Traverse remote directory once in deterministic sorted order, skipping temp/fullres files."""
+        if _depth > _max_depth:
+            return []
+
+        try:
+            entries = sftp.listdir_attr(remote_dir)
+        except (OSError, AttributeError, NotImplementedError) as exc:
+            logger.debug("Could not list remote dir attrs %s: %s", remote_dir, exc)
+            return []
+
+        if not isinstance(entries, (list, tuple)):
+            try:
+                entries = list(entries)
+            except TypeError:
+                return []
+
+        valid_entries = [
+            attr
+            for attr in entries
+            if isinstance(getattr(attr, "filename", None), str)
+            and attr.filename not in ("", ".", "..")
+            and "/" not in attr.filename
+            and "\\" not in attr.filename
+            and not attr.filename.endswith((".tmp", ".part"))
+            and attr.filename.lower() != "fullres"
+        ]
+        valid_entries.sort(key=lambda a: str(a.filename).lower())
+
+        collected: list[tuple[str, Path, str, int]] = []
+        for attr in valid_entries:
+            name = str(attr.filename)
+            remote_child = posixpath.join(remote_dir, name)
+            local_child = local_dir / name
+            rel_child = f"{_rel_prefix}/{name}" if _rel_prefix else name
+            st_mode = getattr(attr, "st_mode", None)
+            if isinstance(st_mode, int) and stat.S_ISDIR(st_mode):
+                collected.extend(
+                    self._collect_remote_files(
+                        sftp,
+                        remote_child,
+                        local_child,
+                        _rel_prefix=rel_child,
+                        _depth=_depth + 1,
+                        _max_depth=_max_depth,
+                    )
+                )
+            else:
+                st_size = getattr(attr, "st_size", 0)
+                size_bytes = int(st_size) if isinstance(st_size, (int, float)) and st_size > 0 else 0
+                collected.append((remote_child, local_child, rel_child, size_bytes))
+        return collected
+
     def _download_remote_dir(
         self,
         sftp: Any,
@@ -284,55 +348,44 @@ class SshMissionWorker(ManagedWorker):
         _depth: int = 0,
         _max_depth: int = 5,
     ) -> dict[str, int]:
-        """Recursively download remote run artifacts (images, annotations, summaries)."""
-        counts = {"files": 0, "images": 0, "annotations": 0}
-        if _depth > _max_depth:
+        """Recursively download remote run artifacts with progress logging."""
+        counts = {"files": 0, "images": 0, "annotations": 0, "bytes": 0}
+        plan = self._collect_remote_files(
+            sftp,
+            remote_dir,
+            local_dir,
+            _depth=_depth,
+            _max_depth=_max_depth,
+        )
+        total = len(plan)
+        if total == 0:
             return counts
-
-        try:
-            entries = sftp.listdir_attr(remote_dir)
-        except (OSError, AttributeError, NotImplementedError) as exc:
-            logger.debug("Could not list remote dir attrs %s: %s", remote_dir, exc)
-            return counts
-
-        if not isinstance(entries, (list, tuple)):
-            try:
-                entries = list(entries)
-            except TypeError:
-                return counts
 
         local_dir.mkdir(parents=True, exist_ok=True)
-        for attr in entries:
-            name = getattr(attr, "filename", None)
-            if not isinstance(name, str) or not name or name in (".", ".."):
-                continue
-            if "/" in name or "\\" in name:
-                continue
-            if name.endswith(".tmp") or name.endswith(".part"):
-                continue
+        expected_bytes = sum(sz for _, _, _, sz in plan)
+        size_hint = (
+            f" (~{expected_bytes / (1024 * 1024):.2f} МБ)" if expected_bytes > 0 else ""
+        )
+        self.log_received.emit(f"📥 К загрузке файлов: {total}{size_hint}")
 
-            remote_child = posixpath.join(remote_dir, name)
-            local_child = local_dir / name
-            st_mode = getattr(attr, "st_mode", None)
-            if isinstance(st_mode, int) and stat.S_ISDIR(st_mode):
-                sub = self._download_remote_dir(
-                    sftp,
-                    remote_child,
-                    local_child,
-                    _depth=_depth + 1,
-                    _max_depth=_max_depth,
-                )
-                counts["files"] += sub["files"]
-                counts["images"] += sub["images"]
-                counts["annotations"] += sub["annotations"]
-            else:
-                if self._sftp_get_safe(sftp, remote_child, local_child):
-                    counts["files"] += 1
-                    lower = name.lower()
-                    if lower.endswith((".jpg", ".jpeg", ".png")):
-                        counts["images"] += 1
-                    elif lower == "annotations.json":
-                        counts["annotations"] += 1
+        for idx, (remote_child, local_child, rel_child, _) in enumerate(plan, start=1):
+            if self._sftp_get_safe(sftp, remote_child, local_child):
+                counts["files"] += 1
+                try:
+                    file_bytes = local_child.stat().st_size if local_child.exists() else 0
+                except OSError:
+                    file_bytes = 0
+                counts["bytes"] += file_bytes
+                lower = local_child.name.lower()
+                if lower.endswith((".jpg", ".jpeg", ".png")):
+                    counts["images"] += 1
+                elif lower == "annotations.json":
+                    counts["annotations"] += 1
+                if total <= 40 or idx == 1 or idx == total or idx % 5 == 0 or lower.endswith(".json"):
+                    mb_done = counts["bytes"] / (1024 * 1024)
+                    self.log_received.emit(
+                        f"📥 [{idx}/{total}] {rel_child} ({mb_done:.2f} МБ)"
+                    )
         return counts
 
     def _download_artifacts_sftp(self, client: Any) -> None:
@@ -377,6 +430,7 @@ class SshMissionWorker(ManagedWorker):
             local_summary_file = local_target_dir / "summary.json"
             local_manifest_file = local_target_dir / "manifest.json"
 
+            download_t0 = time.monotonic()
             self.log_received.emit(f"📥 Скачивание: {remote_run_dir} -> {local_target_dir}")
             stats = self._download_remote_dir(sftp, remote_run_dir, local_target_dir)
 
@@ -386,16 +440,22 @@ class SshMissionWorker(ManagedWorker):
                 summary_ok = self._sftp_get_safe(sftp, remote_summary, local_summary_file)
                 if summary_ok:
                     stats["files"] += 1
+                    if local_summary_file.exists():
+                        stats["bytes"] += local_summary_file.stat().st_size
 
             if not local_manifest_file.exists():
                 remote_manifest = posixpath.join(remote_run_dir, "manifest.json")
                 if self._sftp_get_safe(sftp, remote_manifest, local_manifest_file):
                     stats["files"] += 1
+                    if local_manifest_file.exists():
+                        stats["bytes"] += local_manifest_file.stat().st_size
 
             if stats["files"] == 0 and not summary_ok:
                 self.log_received.emit("⚠️ Артефакты миссии на борту не найдены")
                 return
 
+            elapsed_s = max(0.0, time.monotonic() - download_t0)
+            total_mb = stats["bytes"] / (1024 * 1024)
             present_variants = [
                 v for v in ("local_aruco", "preserve_original") if (local_target_dir / v).is_dir()
             ]
@@ -403,7 +463,7 @@ class SshMissionWorker(ManagedWorker):
             self.log_received.emit(
                 f"✅ Артефакты миссии сохранены в {local_target_dir} "
                 f"(файлов: {stats['files']}, снимков: {stats['images']}, "
-                f"аннотаций: {stats['annotations']}{variants_note})"
+                f"аннотаций: {stats['annotations']}, {total_mb:.2f} МБ за {elapsed_s:.1f} с{variants_note})"
             )
             self.run_downloaded.emit(str(local_target_dir))
             if summary_ok:

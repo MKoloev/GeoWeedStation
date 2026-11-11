@@ -281,3 +281,64 @@ def test_save_and_load_status_preservation(tmp_path: Path):
 
     assert restored_entries["f_error.jpg"].status == ProcessingStatus.ERROR
     assert restored_entries["f_error.jpg"].detections_count is None
+
+
+def test_load_summary_json_uses_real_image_size_and_altitude(tmp_path: Path):
+    """Pixel bbox_px in summary.json normalizes using actual JPEG dims and flags z<=0 as NO_METADATA."""
+    from tests.helpers.make_media import make_real_jpeg
+
+    folder = tmp_path / "run_summary"
+    folder.mkdir()
+    img0 = make_real_jpeg(folder / "capture_000.jpg", size=(1600, 1200))
+    img1 = make_real_jpeg(folder / "capture_001.jpg", size=(1600, 1200))
+
+    summary_data = {
+        "run_id": "run_test_real_size",
+        "coordinate_system": "aruco_local",
+        "detections_count": 2,
+        "items": [
+            {
+                "wp_index": 0,
+                "camera_x": 0.5,
+                "camera_y": 0.5,
+                "altitude_m": 2.0,
+                "detections": [
+                    {
+                        "class_name": "weed",
+                        "confidence": 0.9,
+                        "bbox_px": [400, 300, 800, 600],
+                    }
+                ],
+            },
+            {
+                "wp_index": 1,
+                "camera_x": 1.0,
+                "camera_y": 0.5,
+                "altitude_m": 0.0,
+                "detections": [
+                    {
+                        "class_name": "weed",
+                        "confidence": 0.8,
+                        "bbox_px": [160, 120, 320, 240],
+                    }
+                ],
+            },
+        ],
+    }
+    sum_file = folder / "summary.json"
+    sum_file.write_text(json.dumps(summary_data), encoding="utf-8")
+
+    loaded = load_annotations_file(sum_file, [img0, img1])
+    det0 = loaded[str(img0)][0]
+    assert det0.bbox.x == pytest.approx(0.25)
+    assert det0.bbox.y == pytest.approx(0.25)
+    assert det0.bbox.w == pytest.approx(0.25)
+    assert det0.bbox.h == pytest.approx(0.25)
+    assert loaded.get_has_xmp(img0) is True
+    assert loaded.get_status(img0) == ProcessingStatus.DONE
+
+    det1 = loaded[str(img1)][0]
+    assert det1.bbox.x == pytest.approx(0.1)
+    assert det1.bbox.y == pytest.approx(0.1)
+    assert loaded.get_has_xmp(img1) is False
+    assert loaded.get_status(img1) == ProcessingStatus.NO_METADATA

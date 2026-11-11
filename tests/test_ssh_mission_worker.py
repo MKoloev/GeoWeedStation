@@ -194,13 +194,15 @@ def test_ssh_mission_worker_connection_failure(qtbot):
 
 
 def test_default_ssh_command_has_optimal_detector_params():
-    """Verify DEFAULT_SSH_COMMAND passes the tuned RKNN detector parameters."""
+    """Verify DEFAULT_SSH_COMMAND passes the tuned RKNN detector and transfer parameters."""
     from geo_weed_station.workers.ssh_mission_worker import DEFAULT_SSH_COMMAND
 
     assert "--gsd 0.00022" in DEFAULT_SSH_COMMAND
     assert "--iou-thresh 0.25" in DEFAULT_SSH_COMMAND
     assert "--conf-thresh 0.6" in DEFAULT_SSH_COMMAND
     assert "--containment-thresh 0.7" in DEFAULT_SSH_COMMAND
+    assert "--transfer-max-dim 1600" in DEFAULT_SSH_COMMAND
+    assert "--transfer-quality 85" in DEFAULT_SSH_COMMAND
 
 
 def test_ssh_mission_worker_downloads_full_run_tree_sftp(qtbot, tmp_path: Path):
@@ -333,3 +335,75 @@ def test_ssh_mission_worker_sftp_missing_summary_no_empty_file(qtbot, tmp_path: 
     assert downloaded_summaries == []
     assert not (local_run / "summary.json").exists()
     assert not (local_run / "summary.json.part").exists()
+
+
+def test_ssh_mission_worker_logs_progress_and_skips_fullres(qtbot, tmp_path: Path):
+    """Verify SFTP download logs per-file progress and skips any fullres artifacts."""
+    import stat
+    from types import SimpleNamespace
+
+    remote_root = "/home/orangepi/tsu/CollectOnboardImage/runs/run_20261111_140000"
+    remote_fs: dict[str, bytes | list[SimpleNamespace]] = {
+        remote_root: [
+            SimpleNamespace(filename="preserve_original", st_mode=stat.S_IFDIR),
+            SimpleNamespace(filename="local_aruco", st_mode=stat.S_IFDIR),
+            SimpleNamespace(filename="fullres", st_mode=stat.S_IFDIR),
+            SimpleNamespace(filename="summary.json", st_mode=stat.S_IFREG, st_size=128),
+        ],
+        f"{remote_root}/local_aruco": [
+            SimpleNamespace(filename="capture_000.jpg", st_mode=stat.S_IFREG, st_size=512),
+            SimpleNamespace(filename="annotations.json", st_mode=stat.S_IFREG, st_size=64),
+        ],
+        f"{remote_root}/preserve_original": [
+            SimpleNamespace(filename="capture_000.jpg", st_mode=stat.S_IFREG, st_size=512),
+            SimpleNamespace(filename="annotations.json", st_mode=stat.S_IFREG, st_size=64),
+        ],
+        f"{remote_root}/fullres": [
+            SimpleNamespace(filename="raw_50mp.jpg", st_mode=stat.S_IFREG, st_size=19_000_000),
+        ],
+        f"{remote_root}/summary.json": b'{"run_id":"run_20261111_140000","coordinate_system":"aruco_local","detections_count":0,"items":[]}',
+        f"{remote_root}/local_aruco/capture_000.jpg": b"A" * 512,
+        f"{remote_root}/local_aruco/annotations.json": b"{}",
+        f"{remote_root}/preserve_original/capture_000.jpg": b"B" * 512,
+        f"{remote_root}/preserve_original/annotations.json": b"{}",
+        f"{remote_root}/fullres/raw_50mp.jpg": b"C" * 100,
+    }
+
+    mock_sftp = MagicMock()
+    mock_sftp.listdir_attr.side_effect = lambda rdir: remote_fs[rdir]
+
+    def _fake_get(remote_path: str, local_path: str) -> None:
+        if remote_path not in remote_fs or not isinstance(remote_fs[remote_path], bytes):
+            raise FileNotFoundError(remote_path)
+        Path(local_path).write_bytes(remote_fs[remote_path])  # type: ignore[arg-type]
+
+    mock_sftp.get.side_effect = _fake_get
+
+    mock_channel = DummyChannel([f"Created mission run directory: {remote_root}\n"], exit_code=0)
+    mock_transport = MagicMock()
+    mock_transport.open_session.return_value = mock_channel
+    mock_client = MagicMock()
+    mock_client.get_transport.return_value = mock_transport
+    mock_client.open_sftp.return_value = mock_sftp
+
+    worker = SshMissionWorker(host="10.42.0.1", local_runs_dir=tmp_path)
+    logs: list[str] = []
+    finished: list[tuple[bool, str]] = []
+    worker.log_received.connect(logs.append)
+    worker.mission_finished.connect(lambda ok, msg: finished.append((ok, msg)))
+
+    with patch("geo_weed_station.workers.ssh_mission_worker.paramiko.SSHClient", return_value=mock_client):
+        thread = start_in_thread(worker, "test_ssh_progress_skip_fullres")
+        try:
+            qtbot.waitUntil(lambda: len(finished) >= 1, timeout=3000)
+        finally:
+            worker.request_stop()
+            thread.quit()
+            thread.wait(3000)
+
+    local_run = tmp_path / "run_20261111_140000"
+    assert (local_run / "local_aruco" / "capture_000.jpg").is_file()
+    assert (local_run / "preserve_original" / "capture_000.jpg").is_file()
+    assert not (local_run / "fullres").exists()
+    assert any("[1/5]" in line for line in logs)
+    assert any("МБ за" in line for line in logs)

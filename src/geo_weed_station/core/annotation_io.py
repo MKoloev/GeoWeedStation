@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from geo_weed_station.core.image_io import get_image_size
 from geo_weed_station.schemas.entities import BBox, DetectedWeed
 from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
 
@@ -403,10 +405,20 @@ def load_annotations_file(
                     idx = int(it["wp_index"])
                     dets = it.get("detections", [])
                     raw_dets = dets if isinstance(dets, list) else []
+                    if "altitude_m" in it:
+                        alt_raw = it.get("altitude_m")
+                        has_geo = (
+                            isinstance(alt_raw, (int, float))
+                            and not isinstance(alt_raw, bool)
+                            and math.isfinite(float(alt_raw))
+                            and float(alt_raw) > 0.0
+                        )
+                    else:
+                        has_geo = True
                     rec = _RawFrameRecord(
                         raw_dets=raw_dets,
-                        status=ProcessingStatus.DONE,
-                        has_xmp=True,
+                        status=ProcessingStatus.DONE if has_geo else ProcessingStatus.NO_METADATA,
+                        has_xmp=has_geo,
                         count=len(raw_dets),
                     )
                     by_index[idx] = rec
@@ -477,13 +489,17 @@ def load_annotations_file(
                 rec = by_index[idx]
 
         if rec is not None:
+            resolved_img_size: tuple[int, int] | None = None
             parsed: list[DetectedWeed] = []
             for d_idx, d_dict in enumerate(rec.raw_dets):
                 if isinstance(d_dict, dict):
+                    if resolved_img_size is None and not isinstance(d_dict.get("bbox"), dict):
+                        resolved_img_size = get_image_size(img_p) if img_p.is_file() else (1024, 1024)
                     weed = parse_detection_item(
                         d_dict,
                         default_class="weed",
                         default_id=f"det_{d_idx}",
+                        img_size=resolved_img_size or (1024, 1024),
                     )
                     if weed is not None:
                         parsed.append(weed)

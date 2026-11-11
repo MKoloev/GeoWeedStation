@@ -305,12 +305,21 @@ class OnlineController(QObject):
                 data = json.load(f)
             summary = SummaryDetections.model_validate(data)
             self._map_ctrl.on_summary(summary)
-            self._window.status_bar_panel.set_message(
-                f"Данные детекций миссии {summary.run_id} успешно нанесены на карту"
-            )
-            self.mission_control.append_log(
-                f"\n🗺️ Детекции сорняков ({summary.detections_count} шт.) нанесены на карту станции."
-            )
+            if self._map_ctrl.is_locked:
+                self._window.status_bar_panel.set_message(
+                    f"Миссия {summary.run_id} завершена, карта заблокирована: отсутствует валидная геопривязка (altitude <= 0)"
+                )
+                self.mission_control.append_log(
+                    "\n⚠️ Геопривязка в summary.json отсутствует или altitude <= 0.0 м — "
+                    "карта станции заблокирована (для теста на столе используйте --fallback-telemetry-altitude)."
+                )
+            else:
+                self._window.status_bar_panel.set_message(
+                    f"Данные детекций миссии {summary.run_id} успешно нанесены на карту"
+                )
+                self.mission_control.append_log(
+                    f"\n🗺️ Детекции сорняков ({summary.detections_count} шт.) нанесены на карту станции."
+                )
         except (json.JSONDecodeError, OSError, ValueError) as exc:
             logger.warning("Failed to parse downloaded mission summary %s: %s", summary_path, exc)
             self.mission_control.append_log(f"⚠️ Ошибка парсинга артефакта summary.json: {exc}")
