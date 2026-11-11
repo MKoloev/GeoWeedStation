@@ -1,0 +1,6 @@
+{
+  "model_type": "yolox",
+  "0": "plant",
+  "confidence_threshold": 0.25,
+  "nms_iou_threshold": 0.1
+}
