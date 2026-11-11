@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QPixmap
@@ -26,6 +26,14 @@ STATUS_TEXT_DISCONNECTED = "🔴 Нет связи с бортом"
 DEFAULT_STREAM_HOST = "10.42.0.1"
 DEFAULT_STREAM_PORT = 8080
 DEFAULT_STREAM_TOPIC = "/yolo/debug"
+
+# Opener ignoring http_proxy/https_proxy environment variables (direct connection to the drone).
+_DIRECT_OPENER = build_opener(ProxyHandler({}))
+
+
+def urlopen(req: Request, timeout: float):  # noqa: ANN201
+    """Open request directly (no system proxy) -- drone is on a local Wi-Fi network."""
+    return _DIRECT_OPENER.open(req, timeout=timeout)
 
 
 class LiveStreamWorker(ManagedWorker):
@@ -154,6 +162,8 @@ class LiveStreamWorker(ManagedWorker):
 
         try:
             req = Request(url, headers={"User-Agent": "GeoWeedStation-GCS/1.0"})
+            # The drone lives on a direct local Wi-Fi link (10.42.0.0/24): never route it through
+            # system HTTP(S) proxies (e.g. Clash/V2Ray via http_proxy), which return 502/timeouts.
             with urlopen(req, timeout=timeout) as resp:
                 status_code = resp.status
                 if status_code == 200:

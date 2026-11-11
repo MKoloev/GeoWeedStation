@@ -191,3 +191,13 @@ def test_ssh_mission_worker_connection_failure(qtbot):
             worker.request_stop()
             thread.quit()
             thread.wait(3000)
+
+
+def test_default_ssh_command_has_optimal_detector_params():
+    """Verify DEFAULT_SSH_COMMAND passes the tuned RKNN detector parameters."""
+    from geo_weed_station.workers.ssh_mission_worker import DEFAULT_SSH_COMMAND
+
+    assert "--gsd 0.00022" in DEFAULT_SSH_COMMAND
+    assert "--iou-thresh 0.25" in DEFAULT_SSH_COMMAND
+    assert "--conf-thresh 0.6" in DEFAULT_SSH_COMMAND
+    assert "--containment-thresh 0.7" in DEFAULT_SSH_COMMAND

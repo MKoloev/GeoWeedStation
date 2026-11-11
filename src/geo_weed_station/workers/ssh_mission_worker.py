@@ -36,8 +36,10 @@ DEFAULT_SSH_COMMAND = (
     '--speed 0.5 '
     '--hover-delay 1.0 '
     '--nav-timeout 20.0 '
-    '--conf-thresh 0.35 '
-    '--gsd 0.00027 '
+    '--gsd 0.00022 '
+    '--iou-thresh 0.25 '
+    '--conf-thresh 0.6 '
+    '--containment-thresh 0.7 '
     '--core-mask 0_1_2"'
 )
 

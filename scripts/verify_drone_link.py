@@ -43,9 +43,11 @@ def build_bench_command(nav_timeout: float = 3.0, hover_delay: float = 0.5) -> s
         '--speed 0.5 '
         f'--hover-delay {hover_delay} '
         f'--nav-timeout {nav_timeout} '
-        '--gsd 0.00027 '
-        '--core-mask 0_1_2 '
-        '--conf-thresh 0.35"'
+        '--gsd 0.00022 '
+        '--iou-thresh 0.25 '
+        '--conf-thresh 0.6 '
+        '--containment-thresh 0.7 '
+        '--core-mask 0_1_2"'
     )
 
 
@@ -62,7 +64,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--bench",
         action="store_true",
-        help="Use short bench-test command (--nav-timeout 3.0, --gsd 0.00027, --core-mask 0_1_2)",
+        help=(
+            "Use short bench-test command "
+            "(--nav-timeout 3.0, --gsd 0.00022, --iou-thresh 0.25, "
+            "--conf-thresh 0.6, --containment-thresh 0.7, --core-mask 0_1_2)"
+        ),
     )
     parser.add_argument("--nav-timeout", type=float, default=3.0, help="Navigation timeout for --bench")
     parser.add_argument("--hover-delay", type=float, default=0.5, help="Hover delay for --bench")

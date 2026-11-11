@@ -38,6 +38,11 @@ def test_default_settings_load():
     assert cfg.map.max_local_extent_m == 3.0
     assert cfg.map.wgs84_origin is None
 
+    assert "--gsd 0.00022" in cfg.ssh.launch_command
+    assert "--iou-thresh 0.25" in cfg.ssh.launch_command
+    assert "--conf-thresh 0.6" in cfg.ssh.launch_command
+    assert "--containment-thresh 0.7" in cfg.ssh.launch_command
+
 
 def test_validation_request_timeout():
     """Verify that request_timeout_s > 2.0 or <= 0 is rejected."""
