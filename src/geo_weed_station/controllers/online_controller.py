@@ -92,7 +92,7 @@ class OnlineController(QObject):
     # Setup & UI embedding
     # -------------------------------------------------------------------------
     def _embed_widgets_in_ui(self) -> None:
-        self._window.set_tab_widget(TAB_MISSION, self.mission_control)
+        self._window.set_tab_widget(TAB_MISSION, self.mission_control, scrollable=True)
         self._window.clear_default_panels(AppMode.ONLINE)
         self._window.add_mode_panel(AppMode.ONLINE, self.telemetry_panel, "Телеметрия БПЛА")
 

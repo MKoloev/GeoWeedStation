@@ -59,7 +59,7 @@ class RunsController(QObject):
         self._wire_signals()
 
     def _embed_widgets_in_ui(self) -> None:
-        self._window.set_tab_widget(TAB_RUNS, self.runs_table)
+        self._window.set_tab_widget(TAB_RUNS, self.runs_table, scrollable=True)
 
     def _wire_signals(self) -> None:
         self.runs_table.refresh_requested.connect(self.refresh)

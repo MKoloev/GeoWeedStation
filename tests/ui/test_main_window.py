@@ -17,6 +17,7 @@ from geo_weed_station.ui.main_window import (
     MAP_LOCKED_TEXT,
     TAB_IMAGE,
     TAB_MAP,
+    TAB_MISSION,
     MainWindow,
 )
 from geo_weed_station.ui.theme import ICONS_DIR, icon, load_stylesheet
@@ -240,3 +241,31 @@ def test_main_launches_window(tmp_path, monkeypatch):
     monkeypatch.setattr("geo_weed_station.main.get_settings", lambda *a, **kw: s)
     assert app_main.main() == 0
     assert (tmp_path / "app.log").exists()
+
+
+def test_scrollable_tabs_and_panels_limit_minimum_size(window, qtbot):
+    from PySide6.QtWidgets import QScrollArea, QWidget
+
+    big_widget = QWidget()
+    big_widget.setMinimumSize(1800, 1200)
+
+    # Adding scrollable tab
+    window.set_tab_widget(TAB_MISSION, big_widget, scrollable=True)
+    stack_content = window._pages[TAB_MISSION].widget(0)
+    assert isinstance(stack_content, QScrollArea)
+    assert stack_content.widget() is big_widget
+
+    # Adding scrollable panel
+    panel_widget = QWidget()
+    panel_widget.setMinimumSize(600, 400)
+    window.add_mode_panel(AppMode.ONLINE, panel_widget, "Большая панель")
+
+    dock = window.mode_panels(AppMode.ONLINE)[-1]
+    assert isinstance(dock.widget(), QScrollArea)
+    assert dock.widget().widget() is panel_widget
+
+    # Window minimum size is not constrained by 1800x1200
+    window.adjustSize()
+    min_sz = window.minimumSizeHint()
+    assert min_sz.width() < 1200
+

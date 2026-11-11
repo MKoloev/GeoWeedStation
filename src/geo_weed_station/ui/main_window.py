@@ -8,8 +8,10 @@ from PySide6.QtCore import QObject, QSettings, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent
 from PySide6.QtWidgets import (
     QDockWidget,
+    QFrame,
     QLabel,
     QMainWindow,
+    QScrollArea,
     QStackedWidget,
     QTabWidget,
     QToolBar,
@@ -203,13 +205,24 @@ class MainWindow(QMainWindow):
     def tab_index(self, key: str) -> int:
         return self._tabs.indexOf(self._pages[key])
 
-    def set_tab_widget(self, key: str, widget: QWidget) -> None:
+    @staticmethod
+    def _scrollable_content(widget: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(widget)
+        return scroll
+
+    def set_tab_widget(self, key: str, widget: QWidget, *, scrollable: bool = False) -> None:
         """Install a real content widget into a tab (replaces the placeholder)."""
         stack = self._pages[key]
         old = stack.widget(_PAGE_CONTENT)
         stack.removeWidget(old)
         old.deleteLater()
-        stack.insertWidget(_PAGE_CONTENT, widget)
+        stack.insertWidget(
+            _PAGE_CONTENT,
+            self._scrollable_content(widget) if scrollable else widget,
+        )
         stack.setCurrentIndex(_PAGE_LOCKED if (key == TAB_MAP and self._map_locked) else _PAGE_CONTENT)
 
     def add_mode_panel(self, mode: AppMode, widget: QWidget, title: str = "") -> None:
@@ -218,7 +231,9 @@ class MainWindow(QMainWindow):
         dock = QDockWidget(title or widget.windowTitle() or mode.value, self)
         dock.setObjectName(f"panel_{mode.value}_{len(self._panels[mode])}")
         dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
-        dock.setWidget(widget)
+        dock.setWidget(
+            widget if isinstance(widget, QLabel) else self._scrollable_content(widget)
+        )
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
         if self._panels[mode]:
             first_dock = self._panels[mode][0]
