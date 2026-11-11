@@ -24,6 +24,8 @@ DEFAULT_SSH_HOST = "10.42.0.1"
 DEFAULT_SSH_PORT = 22
 DEFAULT_SSH_USER = "orangepi"
 DEFAULT_SSH_PASSWORD = "orangepi"
+DEFAULT_REMOTE_WORKDIR = "/home/orangepi/tsu/CollectOnboardImage"
+
 DEFAULT_SSH_COMMAND = (
     'bash -l -c "cd /home/orangepi/tsu/CollectOnboardImage && python3 main.py '
     '--input-dir data_image/06_geosaero_corner_25_wgs84_10pct_aruc_ex '
@@ -34,8 +36,22 @@ DEFAULT_SSH_COMMAND = (
     '--speed 0.5 '
     '--hover-delay 1.0 '
     '--nav-timeout 20.0 '
-    '--conf-thresh 0.35"'
+    '--conf-thresh 0.35 '
+    '--gsd 0.00027 '
+    '--core-mask 0_1_2"'
 )
+
+
+def resolve_remote_path(remote_path: str, command: str) -> str:
+    """Resolve a relative remote path against the `cd <dir>` target in an SSH command."""
+    import posixpath
+    import re
+
+    if remote_path.startswith("/"):
+        return remote_path
+    match = re.search(r'(?:^|[;&\s"\'])cd\s+([^\s;&"\']+)', command)
+    workdir = match.group(1).rstrip("/") if match else DEFAULT_REMOTE_WORKDIR
+    return posixpath.normpath(posixpath.join(workdir, remote_path))
 
 _WP_REGEX = re.compile(r"\[WP\s+(\d+)\s*/\s*(\d+)\]", re.IGNORECASE)
 _SUMMARY_REGEX = re.compile(r"Saved summary:\s*(\S+)", re.IGNORECASE)
@@ -171,6 +187,10 @@ class SshMissionWorker(ManagedWorker):
             logger.info("Remote process terminated with exit code %s", self._exit_status)
             self.log_received.emit(f"\n[SSH] Процесс завершился с кодом: {self._exit_status}")
 
+            # Optional artifact download over SFTP before emitting mission_finished
+            if self.download_artifacts and self.local_runs_dir is not None:
+                self._download_artifacts_sftp(client)
+
             # Check success / abort
             if self._exit_status == 0:
                 msg = "Миссия успешно завершена (код 0)"
@@ -184,10 +204,6 @@ class SshMissionWorker(ManagedWorker):
                 msg = f"Миссия завершилась с ошибкой (код {self._exit_status})"
                 self.log_received.emit(f"⚠️ {msg}")
                 self.mission_finished.emit(False, msg)
-
-            # Optional artifact download over SFTP
-            if self.download_artifacts and self.local_runs_dir is not None:
-                self._download_artifacts_sftp(client)
 
         except Exception as exc:
             err_msg = f"Ошибка выполнения SSH миссии: {exc}"
@@ -252,6 +268,8 @@ class SshMissionWorker(ManagedWorker):
             # If not explicitly captured, check remote_run_dir
             if remote_summary is None and self._remote_run_dir is not None:
                 remote_summary = f"{self._remote_run_dir}/summary.json"
+            if remote_summary is not None:
+                remote_summary = resolve_remote_path(remote_summary, self.command)
 
             if remote_summary is None:
                 # Try finding the latest run directory on remote

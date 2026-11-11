@@ -143,8 +143,10 @@ class OnlineController(QObject):
         self._window.register_thread(self._command_thread, self._command_worker)
 
         # 3. Live Video Stream Worker (default ROS web_video_server port 8080)
-        stream_port = getattr(self._settings.stream, "port", 8080) if hasattr(self._settings, "stream") else 8080
-        self.start_stream(host=host, port=stream_port)
+        stream_cfg = getattr(self._settings, "stream", None)
+        stream_host = (getattr(stream_cfg, "host", None) or host) if stream_cfg is not None else host
+        stream_port = getattr(stream_cfg, "port", 8080) if stream_cfg is not None else 8080
+        self.start_stream(host=stream_host, port=stream_port)
 
     @Slot()
     def disconnect(self) -> None:

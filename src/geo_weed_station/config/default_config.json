@@ -16,7 +16,7 @@
     "password": "orangepi",
     "connect_timeout_s": 10.0,
     "remote_dir": "/home/orangepi/tsu/CollectOnboardImage",
-    "launch_command": "bash -l -c \"cd /home/orangepi/tsu/CollectOnboardImage && python3 main.py --input-dir data_image/06_geosaero_corner_25_wgs84_10pct_aruc_ex --model models/yolox_m_rk3588_int8.rknn --waypoints waypoints/zigzag_skyris.json --geotag-mode drone_telemetry --altitude 2.0 --speed 0.5 --hover-delay 1.0 --nav-timeout 20.0 --conf-thresh 0.35\""
+    "launch_command": "bash -l -c \"cd /home/orangepi/tsu/CollectOnboardImage && python3 main.py --input-dir data_image/06_geosaero_corner_25_wgs84_10pct_aruc_ex --model models/yolox_m_rk3588_int8.rknn --waypoints waypoints/zigzag_skyris.json --geotag-mode drone_telemetry --altitude 2.0 --speed 0.5 --hover-delay 1.0 --nav-timeout 20.0 --conf-thresh 0.35 --gsd 0.00027 --core-mask 0_1_2\""
   },
   "stream": {
     "host": "10.42.0.1",

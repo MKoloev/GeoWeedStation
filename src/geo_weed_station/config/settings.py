@@ -79,7 +79,9 @@ class SshSettings(BaseModel):
         '--speed 0.5 '
         '--hover-delay 1.0 '
         '--nav-timeout 20.0 '
-        '--conf-thresh 0.35"'
+        '--conf-thresh 0.35 '
+        '--gsd 0.00027 '
+        '--core-mask 0_1_2"'
     )
 
 
