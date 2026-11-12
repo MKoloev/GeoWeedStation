@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from enum import Enum
 from pathlib import Path
+import time
 
 from pydantic import BaseModel, ConfigDict, Field
 from PySide6.QtCore import Qt
@@ -324,6 +325,7 @@ class ExportDialog(QDialog):
                 dpi=self.spin_dpi.value(),
             )
 
+        start = time.time()
         self._result_request = ExportRequest(
             formats=formats,
             target_dir=Path(self.edit_dir.text().strip()),
@@ -331,3 +333,8 @@ class ExportDialog(QDialog):
             png_options=png_opts,
         )
         self.accept()
+
+        try:
+            print(f"Время формирования отчета: {time.time() - start}")
+        except:
+            pass
