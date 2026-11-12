@@ -1,0 +1,2 @@
+-r requirements_common.txt
+onnxruntime>=1.18,<2

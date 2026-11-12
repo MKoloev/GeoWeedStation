@@ -1,0 +1,4 @@
+-r requirements_common.txt
+# Install the matching Rockchip SDK in its dedicated environment:
+# x86 PC simulator/USB device: rknn-toolkit2 (tested 2.3.0).
+# ARM Rockchip board: rknn-toolkit-lite2 plus the matching NPU driver/runtime.

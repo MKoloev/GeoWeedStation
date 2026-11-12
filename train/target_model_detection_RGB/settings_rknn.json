@@ -1,0 +1,22 @@
+{
+  "resolution": 640,
+  "source_gsd": 0.0002736,
+  "reference_width": 8192,
+  "gsd_policy": "reference_width",
+  "overlap": 0.25,
+  "pad_value": 114,
+  "candidate_floor": 0.001,
+  "preliminary_tile_nms": 0.95,
+  "score_epsilon": 1e-07,
+  "inference_batch_size": 4,
+  "fine_gsd": 0.0018,
+  "coarse_gsd": 0.0036,
+  "fine_confidence": 0.43,
+  "coarse_confidence": 0.5887170433998108,
+  "containment": 0.7,
+  "box_fusion": "weighted",
+  "min_large_px": 0,
+  "max_area_ratio": 0.5,
+  "global_nms": 0.3,
+  "local_nms": 0.3
+}

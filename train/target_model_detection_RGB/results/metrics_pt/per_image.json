@@ -1,0 +1,723 @@
+[
+  {
+    "image_id": 0,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155441_0001_V.JPG",
+    "tp": 20,
+    "fp": 1,
+    "fn": 5
+  },
+  {
+    "image_id": 1,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155444_0002_V.JPG",
+    "tp": 4,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 2,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155448_0003_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 3,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155451_0004_V.JPG",
+    "tp": 2,
+    "fp": 1,
+    "fn": 1
+  },
+  {
+    "image_id": 4,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155454_0005_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 5,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155456_0006_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 6,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155459_0007_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 7,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155503_0008_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 8,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155509_0009_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 9,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155512_0010_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 10,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155515_0011_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 11,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155518_0012_V.JPG",
+    "tp": 8,
+    "fp": 0,
+    "fn": 3
+  },
+  {
+    "image_id": 12,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155521_0013_V.JPG",
+    "tp": 14,
+    "fp": 0,
+    "fn": 2
+  },
+  {
+    "image_id": 13,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155524_0014_V.JPG",
+    "tp": 4,
+    "fp": 4,
+    "fn": 3
+  },
+  {
+    "image_id": 14,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155526_0015_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 15,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155529_0016_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 16,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155532_0017_V.JPG",
+    "tp": 1,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 17,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155535_0018_V.JPG",
+    "tp": 6,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 18,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155538_0019_V.JPG",
+    "tp": 3,
+    "fp": 1,
+    "fn": 2
+  },
+  {
+    "image_id": 19,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155541_0020_V.JPG",
+    "tp": 1,
+    "fp": 1,
+    "fn": 3
+  },
+  {
+    "image_id": 20,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155543_0021_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 21,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155546_0022_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 22,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155550_0023_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 23,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155553_0024_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 24,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155556_0025_V.JPG",
+    "tp": 3,
+    "fp": 1,
+    "fn": 4
+  },
+  {
+    "image_id": 25,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155559_0026_V.JPG",
+    "tp": 7,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 26,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155601_0027_V.JPG",
+    "tp": 3,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 27,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155604_0028_V.JPG",
+    "tp": 8,
+    "fp": 2,
+    "fn": 2
+  },
+  {
+    "image_id": 28,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155607_0029_V.JPG",
+    "tp": 3,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 29,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155609_0030_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 30,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155612_0031_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 31,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155615_0032_V.JPG",
+    "tp": 4,
+    "fp": 1,
+    "fn": 2
+  },
+  {
+    "image_id": 32,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155617_0033_V.JPG",
+    "tp": 6,
+    "fp": 0,
+    "fn": 2
+  },
+  {
+    "image_id": 33,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155620_0034_V.JPG",
+    "tp": 2,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 34,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155623_0035_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 35,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155626_0036_V.JPG",
+    "tp": 4,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 36,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155629_0037_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 37,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155632_0038_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 38,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155634_0039_V.JPG",
+    "tp": 1,
+    "fp": 1,
+    "fn": 2
+  },
+  {
+    "image_id": 39,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155637_0040_V.JPG",
+    "tp": 5,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 40,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155639_0041_V.JPG",
+    "tp": 10,
+    "fp": 4,
+    "fn": 4
+  },
+  {
+    "image_id": 41,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155642_0042_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 42,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155645_0043_V.JPG",
+    "tp": 3,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 43,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155648_0044_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 44,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155651_0045_V.JPG",
+    "tp": 4,
+    "fp": 2,
+    "fn": 1
+  },
+  {
+    "image_id": 45,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155654_0046_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 46,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155657_0047_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 1
+  },
+  {
+    "image_id": 47,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155700_0048_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 48,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155703_0049_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 49,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155705_0050_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 50,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155708_0051_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 51,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155711_0052_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 52,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155714_0053_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 53,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155716_0054_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 54,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155719_0055_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 55,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155721_0056_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 56,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155724_0057_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 57,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155726_0058_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 58,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155729_0059_V.JPG",
+    "tp": 1,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 59,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155733_0060_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 60,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155736_0061_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 61,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155738_0062_V.JPG",
+    "tp": 4,
+    "fp": 0,
+    "fn": 1
+  },
+  {
+    "image_id": 62,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155750_0063_V.JPG",
+    "tp": 17,
+    "fp": 3,
+    "fn": 6
+  },
+  {
+    "image_id": 63,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155753_0064_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 64,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155756_0065_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 65,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155759_0066_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 66,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155802_0067_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 67,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155805_0068_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 68,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155808_0069_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 69,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155811_0070_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 70,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155814_0071_V.JPG",
+    "tp": 3,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 71,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155817_0072_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 72,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155820_0073_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 73,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155822_0074_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 74,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155825_0075_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 75,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155828_0076_V.JPG",
+    "tp": 3,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 76,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155831_0077_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 77,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155833_0078_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 78,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155836_0079_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 79,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155839_0080_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 80,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155841_0081_V.JPG",
+    "tp": 7,
+    "fp": 1,
+    "fn": 1
+  },
+  {
+    "image_id": 81,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155844_0082_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 82,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155846_0083_V.JPG",
+    "tp": 2,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 83,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155849_0084_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 84,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155851_0085_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 85,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155854_0086_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 86,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155856_0087_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 87,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155859_0088_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 88,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155902_0089_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 89,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155904_0090_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 90,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155907_0091_V.JPG",
+    "tp": 4,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 91,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155909_0092_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 92,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155912_0093_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 93,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155914_0094_V.JPG",
+    "tp": 0,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 94,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155917_0095_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 95,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155919_0096_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 96,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155922_0097_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 97,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155924_0098_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 98,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155927_0099_V.JPG",
+    "tp": 1,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 99,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155930_0100_V.JPG",
+    "tp": 5,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 100,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155932_0101_V.JPG",
+    "tp": 2,
+    "fp": 1,
+    "fn": 0
+  },
+  {
+    "image_id": 101,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155934_0102_V.JPG",
+    "tp": 2,
+    "fp": 0,
+    "fn": 0
+  },
+  {
+    "image_id": 102,
+    "image": "/media/workerfit/SP PHD U3/\u0422\u0413\u0423/\u0441\u043e\u0440\u0435\u0432\u043d\u043e\u0432\u0430\u043d\u0438\u044f/\u0415\u043a\u0430\u0442\u0435\u0440\u0438\u043d\u0431\u0443\u0440\u0433 2026/datasets/GeosAero_hitech_dataset/GAS_202608281553_032_web/GAS_20260828155937_0103_V.JPG",
+    "tp": 1,
+    "fp": 1,
+    "fn": 0
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "architecture": "D01 YOLOX-M unchanged; RGB 3, plant 1, input 640x640",
+  "models": {
+    "model.pt": "3807ba6a49db77e4dada89230cc333b5fe4bb99d62fd250b8027b7eaf79e7cf3",
+    "model.onnx": "2f4c40f65ac27f410f3036f4363928027781113fdfed827030bf12f892859ef2",
+    "model.rknn": "9bb0bc09ebad9574ecc906dde759623503414ed00723085e9b9d18404627f921"
+  },
+  "all_formats_same_fixed_settings": true,
+  "annotation_access": "scoring only, outside Detector.detect(frame)",
+  "full_dataset": {
+    "images": 103,
+    "gt": 274
+  },
+  "tests": "7 unit tests passed; PT/ONNX arbitrary filename and PT overwrite verified",
+  "hardware": "RKNNLite/physical NPU not measured; Toolkit discovery failed due missing npu_transfer_proxy",
+  "simulator": "INT8 graph rebuilt from the shipped ONNX and original 200 calibration PNG; all 103 frames executed"
+}

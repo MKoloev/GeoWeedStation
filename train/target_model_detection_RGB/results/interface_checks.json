@@ -1,0 +1,16 @@
+[
+  {
+    "format": "pt",
+    "arbitrary_filename": true,
+    "gt_unavailable_to_inference": true,
+    "prediction_count": 4,
+    "overwrite_check": "explicit repeated launch"
+  },
+  {
+    "format": "onnx",
+    "arbitrary_filename": true,
+    "gt_unavailable_to_inference": true,
+    "prediction_count": 4,
+    "overwrite_check": "same shared writer as PT"
+  }
+]
