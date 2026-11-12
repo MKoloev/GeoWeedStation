@@ -455,6 +455,74 @@ def test_offline_controller_status_fidelity_on_reload(offline_setup, qtbot, monk
     assert len(ctrl.map_canvas._points_list) == 1
 
 
+def test_ms5_selection_batch_preview_and_persistence(offline_setup, qtbot):
+    from pathlib import Path
+    from tests.test_ms5_integration import write_ms5
+    from geo_weed_station.schemas.session import FileEntry
+    from geo_weed_station.config.settings import DetectorSettings
+
+    ctrl, map_ctrl, window, tmp_path = offline_setup
+    qtbot.addWidget(window)
+    model = Path(__file__).resolve().parents[2] / 'models/d04_ms5_plant.onnx'
+    ctrl._on_model_changed(model)
+    assert ctrl._settings.detector.input_profile == 'ms5'
+    assert ctrl.filter_panel.selected_classifier_type() == 'none'
+    saved = DetectorSettings.model_validate_json(window._qsettings.value('offline/detector'))
+    assert saved.model_path == model
+    path = write_ms5(tmp_path/'frame.tif', np.full((40,80,5), .5, np.float32))
+    ctrl.file_list_panel.set_entries([FileEntry(path=str(path))])
+    ctrl._load_entry_to_viewer(ctrl.file_list_panel.model.entries[0])
+    qtbot.waitUntil(lambda: ctrl.image_viewer._pixmap_item is not None, timeout=5000)
+    ctrl.start_batch()
+    assert not ctrl.filter_panel._combo_model.isEnabled()
+    assert not ctrl.filter_panel._combo_classifier.isEnabled()
+    # A direct signal must not switch the active configuration mid-batch either.
+    ctrl._on_classifier_changed('c06')
+    assert ctrl._settings.detector.classifier_type == 'none'
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=15000)
+    assert ctrl.filter_panel._combo_model.isEnabled()
+    assert str(path) in ctrl._detections_by_path
+    assert not map_ctrl.engine.weed_map.points  # No XMP: preview/detection only.
+    ctrl._on_classifier_changed('c07')
+    assert not ctrl._detections_by_path
+    assert ctrl._settings.detector.classifier_type == 'c07'
+    window.shutdown_threads()
+
+
+def test_ms5_rejects_rgb_in_batch_with_visible_error(offline_setup, qtbot):
+    from pathlib import Path
+    from tests.helpers.make_media import make_real_jpeg
+    from geo_weed_station.schemas.session import FileEntry, ProcessingStatus
+    ctrl, _, window, tmp_path = offline_setup
+    qtbot.addWidget(window)
+    model = Path(__file__).resolve().parents[2]/'models/d04_ms5_plant.onnx'
+    ctrl._on_model_changed(model)
+    path = make_real_jpeg(tmp_path/'rgb.jpg')
+    ctrl.file_list_panel.set_entries([FileEntry(path=str(path))])
+    ctrl.start_batch()
+    qtbot.waitUntil(lambda: ctrl._batch_worker is None, timeout=10000)
+    assert ctrl.file_list_panel.model.entries[0].status == ProcessingStatus.ERROR
+    assert 'ошибок 1' in window.status_bar_panel.message_text
+    assert ctrl.filter_panel._combo_model.isEnabled()
+    window.shutdown_threads()
+
+
+def test_ms5_settings_restored(offline_setup, qtbot):
+    from pathlib import Path
+    ctrl, map_ctrl, window, _ = offline_setup
+    qtbot.addWidget(window)
+    model = Path(__file__).resolve().parents[2]/'models/d04_ms5_plant.onnx'
+    ctrl._on_model_changed(model)
+    ctrl._on_classifier_changed('c06')
+    restored_window = MainWindow(qsettings=window._qsettings)
+    qtbot.addWidget(restored_window)
+    restored = OfflineController(window=restored_window, map_ctrl=map_ctrl, settings=AppSettings())
+    assert restored._settings.detector.model_path == model
+    assert restored._settings.detector.input_profile == 'ms5'
+    assert restored.filter_panel.selected_classifier_type() == 'c06'
+    assert 'D04 MS5' in restored.filter_panel._combo_model.currentText()
+
+
 
 
 

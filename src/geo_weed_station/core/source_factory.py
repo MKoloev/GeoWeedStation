@@ -11,7 +11,7 @@ import cv2
 
 from geo_weed_station.core.annotation_io import AnnotationsMap, find_annotation_file, load_annotations_file
 from geo_weed_station.core.exceptions import ImageReadError
-from geo_weed_station.core.image_io import get_image_size, read_image
+from geo_weed_station.core.image_io import get_image_size, read_image, read_ms5_image, ms5_rgb_preview
 from geo_weed_station.core.xmp_parser import build_frame_payload, has_xmp
 from geo_weed_station.schemas.entities import DetectedWeed
 from geo_weed_station.schemas.onboard_api import SummaryDetections, summary_to_frame_payloads
@@ -78,7 +78,7 @@ def _entry_for(path: Path) -> FileEntry:
     return FileEntry(path=str(path), size_bytes=size)
 
 
-def load_image_payload(path: Path, load_pixels: bool = True) -> FramePayload:
+def load_image_payload(path: Path, load_pixels: bool = True, input_profile: str = "rgb") -> FramePayload:
     """Decode an image and build a payload using only embedded XMP metadata.
     
     If load_pixels is False, only extracts dimensions and XMP metadata without decoding pixels.
@@ -86,7 +86,8 @@ def load_image_payload(path: Path, load_pixels: bool = True) -> FramePayload:
     path = Path(path)
     if load_pixels:
         orig_w, orig_h = get_image_size(path)
-        image = read_image(path)
+        ms5 = read_ms5_image(path) if input_profile == "ms5" else None
+        image = ms5_rgb_preview(ms5) if ms5 is not None else read_image(path)
         h, w = image.shape[:2]
         payload = build_frame_payload(path, (w, h))
         optics = payload.optics
@@ -100,7 +101,7 @@ def load_image_payload(path: Path, load_pixels: bool = True) -> FramePayload:
             pp_x, pp_y = optics.principal_point_px
             scaled_pp = (pp_x * (w / float(orig_w)), pp_y * (h / float(orig_h)))
             optics = optics.model_copy(update={"principal_point_px": scaled_pp})
-        return payload.model_copy(update={"image": image, "optics": optics})
+        return payload.model_copy(update={"image": image, "optics": optics, "detector_image": ms5})
     else:
         sz = get_image_size(path)
         return build_frame_payload(path, sz)
@@ -109,7 +110,8 @@ def load_image_payload(path: Path, load_pixels: bool = True) -> FramePayload:
 class ImageSource:
     """Single image source."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, input_profile: str = "rgb") -> None:
+        self.input_profile = input_profile
         self.path = Path(path)
         if not self.path.is_file():
             raise FileNotFoundError(f"Image not found: {self.path}")
@@ -118,13 +120,14 @@ class ImageSource:
         return [_entry_for(self.path)]
 
     def load(self, entry: FileEntry, load_pixels: bool = True) -> FramePayload:
-        return load_image_payload(Path(entry.path), load_pixels=load_pixels)
+        return load_image_payload(Path(entry.path), load_pixels=load_pixels, input_profile=self.input_profile)
 
 
 class FolderSource:
     """Recursive folder of images with optional preloaded annotations."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, input_profile: str = "rgb") -> None:
+        self.input_profile = input_profile
         self.path = Path(path)
         if not self.path.is_dir():
             raise NotADirectoryError(f"Folder not found: {self.path}")
@@ -191,7 +194,7 @@ class FolderSource:
 
     def load(self, entry: FileEntry, load_pixels: bool = True) -> FramePayload:
         p = Path(entry.path)
-        payload = load_image_payload(p, load_pixels=load_pixels)
+        payload = load_image_payload(p, load_pixels=load_pixels, input_profile=self.input_profile)
         norm_str = str(p)
         dets = self._annotations_map.get(norm_str)
         if dets is None:
@@ -207,7 +210,8 @@ class FolderSource:
 class VideoSource:
     """Video file source; `load` returns the first frame (streaming is done by VideoWorker)."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, input_profile: str = "rgb") -> None:
+        self.input_profile = input_profile
         self.path = Path(path)
         if not self.path.is_file():
             raise FileNotFoundError(f"Video not found: {self.path}")
@@ -243,7 +247,8 @@ class DroneRunSource:
 
     SUMMARY_NAME = "summary.json"
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, input_profile: str = "rgb") -> None:
+        self.input_profile = input_profile
         self.path = Path(path)
         if not self.path.is_dir():
             raise NotADirectoryError(f"Run directory not found: {self.path}")
@@ -277,7 +282,7 @@ class DroneRunSource:
 
     def load(self, entry: FileEntry) -> FramePayload:
         path = Path(entry.path)
-        payload = load_image_payload(path)
+        payload = load_image_payload(path, input_profile=self.input_profile)
         idx = self._wp_index(path)
         if self._summary is not None and idx is not None:
             for fp in summary_to_frame_payloads(self._summary, payload.image_size_px):
@@ -290,13 +295,15 @@ class SourceFactory:
     """Factory creating frame sources by kind."""
 
     @staticmethod
-    def create(kind: SourceKind, path: Path) -> FrameSource:
+    def create(kind: SourceKind, path: Path, input_profile: str = "rgb") -> FrameSource:
         if kind == "image":
-            return ImageSource(path)
+            return ImageSource(path, input_profile=input_profile)
         if kind == "folder":
-            return FolderSource(path)
+            return FolderSource(path, input_profile=input_profile)
         if kind == "video":
+            if input_profile == "ms5":
+                raise ImageReadError("MS5 не поддерживает RGB-видео")
             return VideoSource(path)
         if kind == "drone_run":
-            return DroneRunSource(path)
+            return DroneRunSource(path, input_profile=input_profile)
         raise ValueError(f"Unknown source kind: {kind!r}")

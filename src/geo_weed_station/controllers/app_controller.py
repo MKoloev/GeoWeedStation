@@ -107,6 +107,10 @@ class AppController(QObject):
     # Settings Handler
     # -------------------------------------------------------------------------
     def _open_settings_dialog(self) -> None:
+        if self.offline_controller._batch_worker is not None:
+            self.window.status_bar_panel.set_message("Сначала завершите обработку")
+            return
+        self.settings = self.offline_controller._settings
         dialog = SettingsDialog(self.settings, parent=self.window)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.settings = dialog.result_settings()

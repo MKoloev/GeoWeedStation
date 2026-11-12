@@ -17,11 +17,12 @@ class BaseDetector(ABC):
         """Load detector model weights into execution session."""
 
     @abstractmethod
-    def detect(self, image: np.ndarray) -> list[DetectedWeed]:
+    def detect(self, image: np.ndarray, *, classification_image: np.ndarray | None = None) -> list[DetectedWeed]:
         """Perform object detection on an image array.
         
         Args:
-            image: RGB image numpy array (H, W, 3).
+            image: RGB uint8 (H,W,3), or normalized MS5 float32 (H,W,5).
+            classification_image: Optional aligned RGB uint8 for crop classification.
             
         Returns:
             List of DetectedWeed instances with normalized BBox [0..1] in original frame coordinates.

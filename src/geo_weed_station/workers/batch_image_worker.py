@@ -75,7 +75,12 @@ class BatchImageWorker(ManagedWorker):
                     count: int | None = len(payload.detections) if payload.detections else None
                     if run_inference:
                         detector = self._ensure_detector()
-                        detections = detector.detect(payload.image)
+                        if payload.detector_image is None:
+                            detections = detector.detect(payload.image)
+                        else:
+                            detections = detector.detect(
+                                payload.detector_image, classification_image=payload.image
+                            )
                         payload = payload.model_copy(update={"detections": detections})
                         count = len(detections)
                     status = (
@@ -84,9 +89,11 @@ class BatchImageWorker(ManagedWorker):
                         else ProcessingStatus.DONE
                     )
                     # Frames cross the thread boundary as copies only
-                    safe = payload.model_copy(
-                        update={"image": None if payload.image is None else payload.image.copy()}
-                    )
+                    rgb = None if payload.image is None else payload.image.copy()
+                    if rgb is not None:
+                        rgb.setflags(write=False)
+                    # The full MS5 cube is only needed in this worker, not in the GUI.
+                    safe = payload.model_copy(update={"image": rgb, "detector_image": None})
                     self._set_status(i, status, count)
                     self.frame_processed.emit(safe)
                     ok += 1

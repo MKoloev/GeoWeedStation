@@ -471,6 +471,7 @@ class ModelMetadata:
     """Parsed model metadata including classes, architecture, and NMS thresholds."""
 
     classes: dict[int, str]
+    input_profile: str = "rgb"
     model_type: str | None = None
     confidence_threshold: float | None = None
     nms_iou_threshold: float | None = None
@@ -525,6 +526,7 @@ def load_model_metadata(path: Path) -> ModelMetadata:
 
         return ModelMetadata(
             classes=classes,
+            input_profile="ms5" if data.get("input_profile") == "ms5" else "rgb",
             model_type=model_type,
             confidence_threshold=conf_thr,
             nms_iou_threshold=iou_thr,
@@ -651,6 +653,7 @@ class OnnxDetector(BaseDetector):
                 classes_p = cand_cls
 
         meta = load_model_metadata(classes_p)
+        self.input_profile = "ms5" if meta.input_profile == "ms5" else settings.input_profile
         self._classes = meta.classes
         self._explicit_model_type = meta.model_type
         self.model_type: str = self._explicit_model_type or ModelType.AUTO.value
@@ -696,6 +699,7 @@ class OnnxDetector(BaseDetector):
 
         if self.classifier_type == "c07":
             cands = [
+                get_models_dir() / "c07_rgb_geosaero" / "c07_rgb_geosaero_best.onnx",
                 get_models_dir() / "resnet50_dualhead_c07.onnx",
                 get_models_dir() / "best.onnx",
                 Path(__file__).resolve().parent.parent.parent.parent / "models" / "c07_rgb_geosaero" / "resnet50_dualhead_c07.onnx",
@@ -705,6 +709,7 @@ class OnnxDetector(BaseDetector):
                     return c
         elif self.classifier_type == "c06":
             cands = [
+                get_models_dir() / "c06_rgb_species" / "c06_rgb_species_best.onnx",
                 get_models_dir() / "resnet50_c06.onnx",
                 Path(__file__).resolve().parent.parent.parent.parent / "models" / "c06_rgb_species" / "resnet50_c06.onnx",
             ]
@@ -719,9 +724,7 @@ class OnnxDetector(BaseDetector):
             return
         cls_path = self._resolve_classifier_path()
         if cls_path is None or not cls_path.is_file():
-            logger.info("Classifier model for '%s' not found. Crop classification disabled.", self.classifier_type)
-            self._classifier_session = None
-            return
+            raise DetectionError(f"Модель классификации {self.classifier_type.upper()} не найдена")
 
         try:
             providers = self._get_providers()
@@ -733,7 +736,13 @@ class OnnxDetector(BaseDetector):
                 sess_options=opts,
                 providers=providers,
             )
-            self._cls_input_name = self._classifier_session.get_inputs()[0].name
+            cls_input = self._classifier_session.get_inputs()[0]
+            if cls_input.shape != [1, 3, 224, 224] or cls_input.type != "tensor(float)":
+                raise DetectionError("C06/C07 ожидает вход float32 [1,3,224,224]")
+            expected = [[1, 11], [1, 5]] if self.classifier_type == "c07" else [[1, 24]]
+            if [o.shape for o in self._classifier_session.get_outputs()] != expected:
+                raise DetectionError("Выходы классификатора не соответствуют выбранной таксономии")
+            self._cls_input_name = cls_input.name
             self._cls_output_names = [o.name for o in self._classifier_session.get_outputs()]
             logger.info(
                 "Loaded ONNX classifier '%s' (%s) with %d outputs",
@@ -742,8 +751,8 @@ class OnnxDetector(BaseDetector):
                 len(self._cls_output_names),
             )
         except Exception as e:
-            logger.warning("Failed to load classifier from %s: %s", cls_path, e)
             self._classifier_session = None
+            raise DetectionError(f"Не удалось загрузить классификатор {cls_path.name}: {e}") from e
 
     def set_classifier(self, classifier_type: str, classifier_path: Path | None = None) -> None:
         """Dynamically configure or switch classifier model."""
@@ -830,7 +839,14 @@ class OnnxDetector(BaseDetector):
                 sess_options=session_options,
                 providers=providers,
             )
-            self._input_name = self._session.get_inputs()[0].name
+            inp = self._session.get_inputs()[0]
+            if self.input_profile == "ms5":
+                if inp.type != "tensor(float)" or inp.shape != [1, 5, 640, 640]:
+                    raise DetectionError(f"MS5 ожидает float32 [1,5,640,640], модель: {inp.type} {inp.shape}")
+                expected = [[1, 6, 80, 80], [1, 6, 40, 40], [1, 6, 20, 20]]
+                if [o.shape for o in self._session.get_outputs()] != expected:
+                    raise DetectionError("Неподдерживаемый экспорт MS5: нужны три карты YOLOX с логитами")
+            self._input_name = inp.name
             self._output_names = [out.name for out in self._session.get_outputs()]
             self.model_type = self._determine_model_type()
             logger.info(
@@ -845,7 +861,11 @@ class OnnxDetector(BaseDetector):
 
         # Optional crop classifier initialization
         if self.classifier_type != "none":
-            self._load_classifier()
+            try:
+                self._load_classifier()
+            except DetectionError:
+                self.close()
+                raise
 
     def close(self) -> None:
         """Release ONNX InferenceSession and free GPU/system memory."""
@@ -860,8 +880,8 @@ class OnnxDetector(BaseDetector):
         else:
             self.model_type = ModelType.AUTO.value
 
-    def detect(self, image: np.ndarray) -> list[DetectedWeed]:
-        """Run object detection on an RGB image array and return normalized weed detections."""
+    def detect(self, image: np.ndarray, *, classification_image: np.ndarray | None = None) -> list[DetectedWeed]:
+        """Detect on RGB/MS5; classify aligned RGB crops and return normalized boxes."""
         if not self.is_loaded:
             self.load()
 
@@ -872,13 +892,31 @@ class OnnxDetector(BaseDetector):
         if orig_h <= 0 or orig_w <= 0:
             return []
 
-        # Letterbox preprocessing
-        lb = letterbox(image, size=self.settings.input_size)
-        pad_x, pad_y = lb.pad
-        scale = lb.scale
+        if self.input_profile == "ms5":
+            from geo_weed_station.core.image_io import validate_ms5, ms5_rgb_preview
+            validate_ms5(image)
+            # D04 reference inference stretches each band to 640x640 (no letterbox).
+            resized = cv2.resize(image, (640, 640), interpolation=cv2.INTER_LINEAR)
+            tensor = np.ascontiguousarray(resized.transpose(2, 0, 1)[None], dtype=np.float32)
+            scale_x, scale_y = 640.0 / orig_w, 640.0 / orig_h
+            pad_x = pad_y = 0.0
+            if classification_image is None:
+                classification_image = ms5_rgb_preview(image)
+        else:
+            if image.ndim != 3 or image.shape[2] != 3:
+                raise DetectionError("RGB-модель ожидает изображение с тремя каналами")
+            lb = letterbox(image, size=self.settings.input_size)
+            tensor = lb.tensor
+            pad_x, pad_y = lb.pad
+            scale_x = scale_y = lb.scale
+            if classification_image is None:
+                classification_image = image
+        if (classification_image.shape != (orig_h, orig_w, 3)
+                or classification_image.dtype != np.uint8):
+            raise DetectionError("Классификатор ожидает совмещённый RGB uint8 размером с исходный кадр")
 
         try:
-            outputs = self._session.run(None, {self._input_name: lb.tensor})
+            outputs = self._session.run(None, {self._input_name: tensor})
         except Exception as e:
             raise DetectionError(f"Inference execution failed: {e}") from e
 
@@ -889,7 +927,7 @@ class OnnxDetector(BaseDetector):
         if self.model_type == ModelType.YOLOX.value:
             boxes_arr, scores_arr, class_ids = _decode_yolox(
                 outputs,
-                input_size=self.settings.input_size,
+                input_size=(640, 640) if self.input_profile == "ms5" else self.settings.input_size,
                 conf_threshold=self.confidence_threshold,
             )
         else:
@@ -916,10 +954,10 @@ class OnnxDetector(BaseDetector):
             class_name = self._classes.get(c_id, f"class_{c_id}")
 
             # Inverse letterbox transformation back to original image space
-            orig_x1 = (bx1 - pad_x) / scale
-            orig_y1 = (by1 - pad_y) / scale
-            orig_x2 = (bx2 - pad_x) / scale
-            orig_y2 = (by2 - pad_y) / scale
+            orig_x1 = (bx1 - pad_x) / scale_x
+            orig_y1 = (by1 - pad_y) / scale_y
+            orig_x2 = (bx2 - pad_x) / scale_x
+            orig_y2 = (by2 - pad_y) / scale_y
 
             # Clip to [0, orig_w] and [0, orig_h]
             orig_x1 = max(0.0, min(float(orig_w), orig_x1))
@@ -940,7 +978,7 @@ class OnnxDetector(BaseDetector):
                 cy2 = min(orig_h, int(round(orig_y2)) + pad_h)
 
                 if (cx2 - cx1) >= 4 and (cy2 - cy1) >= 4:
-                    crop_rgb = image[cy1:cy2, cx1:cx2]
+                    crop_rgb = classification_image[cy1:cy2, cx1:cx2]
                     target_cls_w, target_cls_h = self.settings.classifier_input_size
                     crop_res = cv2.resize(crop_rgb, (target_cls_w, target_cls_h), interpolation=cv2.INTER_LINEAR)
                     crop_norm = (crop_res.astype(np.float32) / 255.0 - mean_rgb) / std_rgb
@@ -977,7 +1015,7 @@ class OnnxDetector(BaseDetector):
                                 class_prob = float(p[sp_id])
                                 c_id = sp_id
                     except Exception as exc:
-                        logger.warning("Error running ONNX crop classification: %s", exc)
+                        raise DetectionError(f"Ошибка классификации RGB-кропа: {exc}") from exc
 
                     if is_background_crop or is_background_class(class_name):
                         continue

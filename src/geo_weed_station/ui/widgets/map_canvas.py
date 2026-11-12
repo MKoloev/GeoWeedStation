@@ -7,7 +7,6 @@ import math
 from collections.abc import Sequence
 from pathlib import Path
 
-import cv2
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
 from PySide6.QtGui import (
@@ -130,25 +129,22 @@ class MosaicFootprintItem(QGraphicsPolygonItem):
                 th_h, th_w = th.shape[:2]
                 qimg = QImage(th.data, th_w, th_h, th_w * 3, QImage.Format.Format_RGB888).copy()
                 pm = QPixmap.fromImage(qimg)
-            elif footprint.source_path and Path(footprint.source_path).is_file():
-                try:
-                    img = cv2.imread(str(footprint.source_path))
-                    if img is not None:
-                        h, w = img.shape[:2]
-                        scale = 400.0 / float(max(h, w))
-                        thumb = cv2.resize(
-                            img,
-                            (max(1, int(round(w * scale))), max(1, int(round(h * scale)))),
-                            interpolation=cv2.INTER_AREA,
-                        )
-                        thumb_rgb = cv2.cvtColor(thumb, cv2.COLOR_BGR2RGB)
-                        th_h, th_w = thumb_rgb.shape[:2]
-                        qimg = QImage(thumb_rgb.data, th_w, th_h, th_w * 3, QImage.Format.Format_RGB888).copy()
-                        pm = QPixmap.fromImage(qimg)
-                except Exception:
-                    pass
 
         if pm is not None and not pm.isNull():
+            self._set_thumbnail_pixmap(pm)
+        elif footprint.source_path:
+            from geo_weed_station.controllers.thumbnail_controller import ThumbnailController
+            self._thumbnail_loader = ThumbnailController(footprint.source_path, self._on_thumbnail)
+            self._thumbnail_loader.start()
+
+    def _on_thumbnail(self, thumbnail) -> None:
+        h, w = thumbnail.shape[:2]
+        qimg = QImage(thumbnail.data, w, h, w * 3, QImage.Format.Format_RGB888).copy()
+        self._set_thumbnail_pixmap(QPixmap.fromImage(qimg))
+
+    def _set_thumbnail_pixmap(self, pm: QPixmap) -> None:
+        footprint = self.footprint
+        if not pm.isNull():
             pix_item = QGraphicsPixmapItem(pm, self)
             pix_item.setOpacity(0.85)
             pw = pm.width()

@@ -297,6 +297,7 @@ class SettingsDialog(QDialog):
             )
             init_det = self._initial_settings.detector
             det = DetectorSettings(
+                input_profile=init_det.input_profile,
                 model_path=Path(self.edit_model_path.text()),
                 classes_path=Path(self.edit_classes_path.text()),
                 classifier_type=init_det.classifier_type,

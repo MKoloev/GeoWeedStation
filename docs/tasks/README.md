@@ -24,6 +24,8 @@
 | [17](task_17_controllers_online.md) | Контроллеры: онлайн и менеджер запусков | 07–11, 14–16 | `controllers/online_controller.py`, `runs_controller.py` | Completed |
 | [18](task_18_packaging_docs.md) | Упаковка и документация | 12, 16, 17 | `deploy/build_app.py`, `installer_linux.sh`, `docs/*.md` | Completed |
 | [19](task_19_e2e_integration_tests.md) | Сквозные тесты и НФТ | 16, 17, 18 | `tests/e2e/`, `tests/nfr/`, `tests/architecture/` | Completed |
+| [20](task_20_weed_classification_stage.md) | Вторая стадия классификации (C06/C07) | 04, 16 | `core/onnx_detector.py`, `ui/widgets/detection_filter_panel.py` | Completed |
+| [21](../d04_ms5_plant_integration.md) | Интеграция D04 MS5 (5-канальный TIFF) | 04, 11, 16, 20 | `core/image_io.py`, `core/onnx_detector.py`, `workers/ms5_preview_worker.py` | Completed |
 
 ## Принятые решения и расхождения документов
 - При конфликте ТЗ и спецификации REST приоритет у спецификации борта: `use_nn` (не `use_model`), `save_policy`, `action=rth` (не `return`), `type=summary|archive|image` + `wp_index`, `coordinate_system="aruco_local"`.

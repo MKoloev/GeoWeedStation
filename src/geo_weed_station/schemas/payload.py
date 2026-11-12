@@ -18,6 +18,7 @@ class FramePayload(BaseModel):
     source_path: str | None = None
     image_size_px: tuple[int, int]  # (width, height)
     image: Any | None = Field(default=None, exclude=True)  # In-memory image buffer, excluded from serialization
+    detector_image: Any | None = Field(default=None, exclude=True)
     pose: CameraSpatialPose | None = None
     optics: SensorOptics | None = None
     detections: list[DetectedWeed] = Field(default_factory=list)

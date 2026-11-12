@@ -126,3 +126,62 @@ def read_image(path: Path) -> np.ndarray:
         raise
     except Exception as e:
         raise ImageReadError(f"Unexpected error decoding image {path.name}: {e}") from e
+
+
+def validate_ms5(image: np.ndarray) -> None:
+    """Validate normalized, registered MS5 data in R,G,B,RE,NIR order."""
+    if image.ndim != 3 or image.shape[2] != 5 or min(image.shape[:2]) < 1:
+        raise ImageReadError("MS5: нужны пять совмещённых каналов [R,G,B,RE,NIR]")
+    if image.dtype != np.float32 or not np.isfinite(image).all():
+        raise ImageReadError("MS5: ожидается конечный float32-массив")
+    if image.min() < 0 or image.max() > 1:
+        raise ImageReadError("MS5: значения float должны находиться в диапазоне [0,1]")
+
+
+def read_ms5_image(path: Path) -> np.ndarray:
+    """Read a registered five-band TIFF; integer scaling matches D04 inference.
+
+    Band order is a required input contract, not guessed from pixel values.
+    Accept interleaved YXS/YXC and planar SYX/CYX/QYX TIFF series.
+    """
+    import tifffile
+
+    path = Path(path)
+    if path.suffix.lower() not in {".tif", ".tiff"}:
+        raise ImageReadError("MS5: выберите пятиканальный TIFF [R,G,B,RE,NIR], не RGB-снимок")
+    try:
+        with tifffile.TiffFile(path) as tif:
+            series = tif.series[0]
+            axes = series.axes
+            if len(series.shape) != 3:
+                raise ImageReadError("MS5: TIFF должен содержать ровно пять полос одного кадра")
+            if axes in {"YXS", "YXC"} and series.shape[-1] == 5:
+                image = series.asarray()
+            elif axes in {"SYX", "CYX", "QYX", "IYX"} and series.shape[0] == 5:
+                image = series.asarray().transpose(1, 2, 0)
+            else:
+                raise ImageReadError(f"MS5: неподдерживаемые оси/форма TIFF: {axes} {series.shape}")
+        if image.dtype == np.uint8:
+            image = image.astype(np.float32) / 255.0
+        elif image.dtype == np.uint16:
+            image = image.astype(np.float32) / 65535.0
+        elif np.issubdtype(image.dtype, np.floating):
+            image = image.astype(np.float32)
+        else:
+            raise ImageReadError("MS5: поддерживаются TIFF uint8, uint16 и float [0,1]")
+        validate_ms5(image)
+        h, w = image.shape[:2]
+        if w > MAX_IMAGE_WIDTH or h > MAX_IMAGE_HEIGHT:
+            scale = min(MAX_IMAGE_WIDTH / w, MAX_IMAGE_HEIGHT / h)
+            image = cv2.resize(image, (max(1, int(w * scale)), max(1, int(h * scale))),
+                               interpolation=cv2.INTER_AREA)
+        return np.ascontiguousarray(image)
+    except ImageReadError:
+        raise
+    except Exception as exc:
+        raise ImageReadError(f"Не удалось прочитать MS5 TIFF {path.name}: {exc}") from exc
+
+
+def ms5_rgb_preview(image: np.ndarray) -> np.ndarray:
+    """RGB uint8 on the same pixel grid; conversion matches reference D04 preview."""
+    return np.ascontiguousarray((image[..., :3] * 255.0).clip(0, 255).astype(np.uint8))

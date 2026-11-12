@@ -87,8 +87,8 @@ class DetectionFilterPanel(QWidget):
 
         self._combo_classifier = QComboBox(self)
         self._combo_classifier.addItem("Отключена", userData="none")
-        self._combo_classifier.addItem("C07 (10 категорий + фазы)", userData="c07")
-        self._combo_classifier.addItem("C06 (23 вида)", userData="c06")
+        self._combo_classifier.addItem("C07 (категории + фазы)", userData="c07")
+        self._combo_classifier.addItem("C06 (виды растений)", userData="c06")
         self._combo_classifier.currentIndexChanged.connect(self._on_combo_classifier_changed)
         cls_layout.addWidget(self._combo_classifier)
 
@@ -191,19 +191,30 @@ class DetectionFilterPanel(QWidget):
 
         for i, m in enumerate(models):
             p = Path(m)
-            self._combo_model.addItem(p.name, userData=str(p))
+            self._combo_model.addItem(
+                "D04 MS5 — 5 каналов" if p.stem == "d04_ms5_plant" else p.name,
+                userData=str(p),
+            )
             if active_resolved is not None and p.exists() and p.resolve() == active_resolved:
                 active_idx = i
 
         if active_idx == -1 and active is not None and Path(active).is_file():
             p = Path(active)
-            self._combo_model.addItem(p.name, userData=str(p))
+            self._combo_model.addItem(
+                "D04 MS5 — 5 каналов" if p.stem == "d04_ms5_plant" else p.name,
+                userData=str(p),
+            )
             active_idx = self._combo_model.count() - 1
 
         if active_idx >= 0:
             self._combo_model.setCurrentIndex(active_idx)
 
         self._block_signals = False
+
+    def set_model_controls_enabled(self, enabled: bool) -> None:
+        self._combo_model.setEnabled(enabled)
+        self._btn_browse_model.setEnabled(enabled)
+        self._combo_classifier.setEnabled(enabled)
 
     def selected_model(self) -> Path | None:
         """Return currently selected ONNX model path or None."""

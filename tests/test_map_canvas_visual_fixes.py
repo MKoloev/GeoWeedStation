@@ -56,8 +56,10 @@ def test_route_waypoints_fixed_screen_size_no_duplicates(qtbot):
     assert len(station_items) == 2
 
 
-def test_mosaic_footprint_on_demand_thumbnail_and_no_center_dot():
-    sample_img = Path("GeoWeedStation/workdir/sample_data/images/valid_000.jpg")
+def test_mosaic_footprint_on_demand_thumbnail_and_no_center_dot(qtbot):
+    sample_img = Path(__file__).resolve().parents[1] / "workdir/sample_data/images/valid_000.jpg"
+    if not sample_img.is_file():
+        sample_img = Path("GeoWeedStation/workdir/sample_data/images/valid_000.jpg")
     fp = FrameFootprint(
         frame_id="valid_000",
         source_path=str(sample_img),
@@ -70,6 +72,7 @@ def test_mosaic_footprint_on_demand_thumbnail_and_no_center_dot():
         polygon=[(-10.0, 7.5), (10.0, 7.5), (10.0, -7.5), (-10.0, -7.5)],
     )
     item = MosaicFootprintItem(fp, pixmap=None)
+    qtbot.waitUntil(lambda: any(isinstance(it, QGraphicsPixmapItem) for it in item.childItems()), timeout=5000)
     pix_items = [it for it in item.childItems() if isinstance(it, QGraphicsPixmapItem)]
     assert len(pix_items) == 1
     assert not pix_items[0].pixmap().isNull()
@@ -100,7 +103,9 @@ def test_mosaic_footprint_quad_alignment_with_yaw():
     from geo_weed_station.core.source_factory import load_image_payload
     from geo_weed_station.schemas.entities import BBox, DetectedWeed
 
-    img_p = Path("GeoWeedStation/workdir/sample_data/images/valid_004.jpg")
+    img_p = Path(__file__).resolve().parents[1] / "workdir/sample_data/images/valid_004.jpg"
+    if not img_p.is_file():
+        img_p = Path("GeoWeedStation/workdir/sample_data/images/valid_004.jpg")
     payload = load_image_payload(img_p)
     det = DetectedWeed(
         weed_id="w_test",
@@ -244,6 +249,20 @@ def test_heatmap_grid_lines_full_rendering_and_cosmetic(qtbot):
     pen = grid_path_item.pen()
     assert pen.isCosmetic()
     assert not grid_path_item.path().isEmpty()
+
+
+def test_ms5_mosaic_thumbnail_uses_rgb_in_background(tmp_path, qtbot):
+    import numpy as np
+    from tests.test_ms5_integration import write_ms5
+    image = np.broadcast_to(np.array([1., .5, 0., .9, .8], np.float32), (20,30,5)).copy()
+    path = write_ms5(tmp_path/'ms5.tif', image)
+    fp = FrameFootprint(frame_id='ms5', source_path=str(path), center_x=0, center_y=0,
+                        width_m=20, height_m=15, altitude_m=20, yaw_deg=0,
+                        polygon=[(-10,7.5),(10,7.5),(10,-7.5),(-10,-7.5)])
+    item = MosaicFootprintItem(fp)
+    qtbot.waitUntil(lambda: any(isinstance(it, QGraphicsPixmapItem) for it in item.childItems()), timeout=5000)
+    pix = next(it for it in item.childItems() if isinstance(it, QGraphicsPixmapItem))
+    assert pix.pixmap().toImage().pixelColor(0,0).getRgb() == (255,127,0,255)
 
 
 

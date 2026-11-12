@@ -9,7 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import QApplication, QFileDialog, QProgressDialog
 
-from geo_weed_station.config.settings import AppSettings
+from geo_weed_station.config.settings import AppSettings, DetectorSettings
 from geo_weed_station.controllers.map_controller import MapController
 from geo_weed_station.core.annotation_io import (
     AnnotationsMap,
@@ -23,6 +23,7 @@ from geo_weed_station.core.onnx_detector import (
     OnnxDetector,
     get_models_dir,
     is_background_class,
+    load_model_metadata,
     resolve_classes_path,
     scan_available_models,
 )
@@ -60,6 +61,7 @@ from geo_weed_station.ui.widgets.video_player_widget import VideoPlayerWidget
 from geo_weed_station.workers.base_worker import start_in_thread
 from geo_weed_station.workers.batch_image_worker import BatchImageWorker
 from geo_weed_station.workers.video_worker import VideoWorker
+from geo_weed_station.workers.ms5_preview_worker import Ms5PreviewWorker
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +101,20 @@ class OfflineController(QObject):
         self._batch_thread: QObject | None = None
         self._video_worker: VideoWorker | None = None
         self._video_thread: QObject | None = None
+        self._batch_errors: list[str] = []
+        self._preview_generation = 0
+        self._preview_worker = None
         self._current_source_folder: Path | None = None
         self._detections_by_path: dict[str, list[DetectedWeed]] = {}
 
+        saved = self._window._qsettings.value("offline/detector") if self._window._qsettings else None
+        if saved and not self._has_custom_detector_factory:
+            try:
+                restored = DetectorSettings.model_validate_json(saved)
+                if restored.model_path.is_file():
+                    self._settings = self._settings.model_copy(update={"detector": restored})
+            except (ValueError, TypeError):
+                logger.warning("Ignoring invalid saved detector selection")
         self._embed_widgets_in_ui()
         self._wire_signals()
         self._init_models_in_ui()
@@ -137,7 +150,9 @@ class OfflineController(QObject):
 
         if resolved_model.is_file():
             updated_det = self._settings.detector.model_copy(
-                update={"model_path": resolved_model, "classes_path": classes_p}
+                update={"model_path": resolved_model, "classes_path": classes_p,
+                        "input_profile": ("rgb" if self._has_custom_detector_factory else
+                                          load_model_metadata(classes_p).input_profile)}
             )
             self._settings = self._settings.model_copy(update={"detector": updated_det})
             if not self._has_custom_detector_factory:
@@ -169,10 +184,13 @@ class OfflineController(QObject):
 
     def apply_settings(self, settings: AppSettings) -> None:
         """Dynamically apply updated application settings and refresh model configuration."""
+        if self._batch_worker is not None:
+            self._window.status_bar_panel.set_message("Сначала завершите обработку")
+            return
         self._settings = settings
-        det_s = self._settings.detector
-        self._detector_factory = lambda d=det_s: OnnxDetector(d)
+        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
         self._init_models_in_ui()
+        self._save_detector_selection()
 
     def _embed_widgets_in_ui(self) -> None:
         # Install content widgets into central tabs
@@ -217,20 +235,31 @@ class OfflineController(QObject):
 
     def _on_model_changed(self, model_path: Path) -> None:
         """Handle model switch: resolve classes, reconfigure factory and update UI filter checkboxes."""
-        classes_path = resolve_classes_path(model_path)
+        if self._batch_worker is not None:
+            self._init_models_in_ui()
+            return
+        classes_path = resolve_classes_path(model_path, get_models_dir() / "classes.json")
+        profile = load_model_metadata(classes_path).input_profile
+        if profile == "ms5" and self._video_worker is not None:
+            self._video_worker.request_stop()
+            self._video_worker = None
+            self.video_player.clear()
+        self._has_custom_detector_factory = False
+        self._clear_model_results()
         logger.info("Switching detection model to %s with classes %s", model_path.name, classes_path.name)
 
         updated_det = self._settings.detector.model_copy(
-            update={"model_path": model_path, "classes_path": classes_path}
+            update={"model_path": model_path, "classes_path": classes_path,
+                    "input_profile": profile, "classifier_type": "none",
+                    "classifier_path": None}
         )
         self._settings = self._settings.model_copy(update={"detector": updated_det})
-        if not self._has_custom_detector_factory:
-            self._detector_factory = lambda det_s=updated_det: OnnxDetector(det_s)
+        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
 
-        self._refresh_filter_panel_classes(
-            update_thresholds=True,
-            include_loaded_detections=True,
-        )
+        self.filter_panel.set_classifier_type("none")
+        self._save_detector_selection()
+        if classes_path.is_file():
+            self.filter_panel.load_classes_from_file(classes_path)
 
         if self._video_worker is not None:
             self._video_worker.set_detector_factory(self._detector_factory)
@@ -240,27 +269,31 @@ class OfflineController(QObject):
         )
 
     def _on_classifier_changed(self, cls_type: str) -> None:
-        """Handle crop classifier switch: update settings, detector factory, and filter panel class list."""
+        """Handle crop classifier switch: update settings and detector factory."""
+        if self._batch_worker is not None:
+            self.filter_panel.set_classifier_type(self._settings.detector.classifier_type)
+            return
+        self._clear_model_results()
         logger.info("Switching crop classifier to %s", cls_type)
         updated_det = self._settings.detector.model_copy(
-            update={"classifier_type": cls_type}
+            update={"classifier_type": cls_type, "classifier_path": None}
         )
         self._settings = self._settings.model_copy(update={"detector": updated_det})
-        if not self._has_custom_detector_factory:
-            self._detector_factory = lambda det_s=updated_det: OnnxDetector(det_s)
+        self._detector_factory = lambda: OnnxDetector(self._settings.detector)
+
+        if self._video_worker is not None:
+            self._video_worker.set_detector_factory(self._detector_factory)
 
         self._refresh_filter_panel_classes(
             update_thresholds=False,
             include_loaded_detections=True,
         )
 
-        if self._video_worker is not None:
-            self._video_worker.set_detector_factory(self._detector_factory)
-
+        self._save_detector_selection()
         labels = {
             "none": "Отключена",
-            "c07": "C07 (10 категорий + фазы)",
-            "c06": "C06 (23 вида)",
+            "c07": "C07 (категории + фазы)",
+            "c06": "C06 (виды растений)",
         }
         lbl = labels.get(cls_type.lower(), cls_type)
         self._window.status_bar_panel.set_message(f"Классификация видов: {lbl}")
@@ -271,6 +304,9 @@ class OfflineController(QObject):
     @Slot()
     def open_image(self) -> None:
         """Open a single image file, populate file list panel and preview without auto-inference."""
+        if self._batch_worker is not None:
+            self._window.status_bar_panel.set_message("Сначала завершите обработку")
+            return
         filters = (
             "Изображения (*.png *.jpg *.jpeg *.tif *.tiff *.PNG *.JPG *.JPEG *.TIF *.TIFF);;"
             "PNG (*.png *.PNG);;"
@@ -381,6 +417,9 @@ class OfflineController(QObject):
     @Slot()
     def open_folder(self) -> None:
         """Open directory of images and populate file list panel."""
+        if self._batch_worker is not None:
+            self._window.status_bar_panel.set_message("Сначала завершите обработку")
+            return
         folder = QFileDialog.getExistingDirectory(
             self._window, "Выбрать каталог снимков", str(self._settings.workdir)
         )
@@ -663,9 +702,33 @@ class OfflineController(QObject):
             logger.exception("Failed to export report: %s", exc)
             self._window.status_bar_panel.set_message(f"Ошибка выгрузки отчета: {exc}")
 
+    def _save_detector_selection(self) -> None:
+        if self._window._qsettings is not None:
+            self._window._qsettings.setValue("offline/detector", self._settings.detector.model_dump_json())
+
+    def _clear_model_results(self) -> None:
+        self._preview_generation += 1
+        if self._preview_worker is not None:
+            self._preview_worker.request_stop()
+        self._detections_by_path.clear()
+        self.image_viewer.clear()
+        self._map_ctrl.reset()
+        self.map_info_panel.clear_selection()
+        for row, entry in enumerate(self.file_list_panel.model.entries):
+            entry.detections_count = None
+            self.file_list_panel.update_status(row, ProcessingStatus.PENDING)
+        self.map_canvas.set_mosaic_footprints([])
+        self.map_canvas.set_prescription_zones([])
+        self.map_canvas.clear_route()
+
     @Slot()
     def open_video(self) -> None:
         """Open video file, initialize background VideoWorker and wire playback controls."""
+        if self._batch_worker is not None:
+            return
+        if self._settings.detector.input_profile == "ms5":
+            self._window.status_bar_panel.set_message("D04 MS5 требует пятиканальный TIFF; RGB-видео не поддерживается")
+            return
         exts = " ".join(f"*{e}" for e in VIDEO_EXTENSIONS)
         path, _ = QFileDialog.getOpenFileName(
             self._window, "Открыть видеофайл", str(self._settings.workdir), f"Videos ({exts})"
@@ -758,6 +821,8 @@ class OfflineController(QObject):
     @Slot()
     def start_batch(self) -> None:
         """Launch background BatchImageWorker processing across loaded folder entries."""
+        if self._batch_worker is not None:
+            return
         entries = self.file_list_panel.model.entries
         if not entries:
             self._window.status_bar_panel.set_message("Пакетный список файлов пуст")
@@ -770,22 +835,26 @@ class OfflineController(QObject):
         self.map_info_panel.clear_selection()
 
         if len(entries) == 1 and Path(entries[0].path).is_file():
-            source = ImageSource(Path(entries[0].path))
+            source = ImageSource(Path(entries[0].path), input_profile=self._settings.detector.input_profile)
         else:
             source_folder = self._current_source_folder or Path(entries[0].path).parent
-            source = FolderSource(source_folder)
+            source = FolderSource(source_folder, input_profile=self._settings.detector.input_profile)
 
         worker = BatchImageWorker(
             source=source,
             detector_factory=self._detector_factory,
         )
+        self._batch_errors.clear()
         self._batch_worker = worker
+        self.filter_panel.set_model_controls_enabled(False)
+        self.file_list_panel.btn_clear.setEnabled(False)
 
         # Connect lifecycle signals
         worker.progress.connect(self._on_batch_progress)
         worker.frame_processed.connect(self._on_batch_frame_processed)
         worker.entry_status_changed.connect(self.file_list_panel.update_status)
         worker.batch_finished.connect(self._on_batch_finished)
+        worker.failed.connect(self._on_batch_error)
 
         # Enable cancel button in status bar
         self._window.status_bar_panel.set_cancel_enabled(True)
@@ -863,6 +932,18 @@ class OfflineController(QObject):
             self._load_entry_to_viewer(entry)
 
     def _load_entry_to_viewer(self, entry: FileEntry) -> None:
+        self._preview_generation += 1
+        if self._preview_worker is not None:
+            self._preview_worker.request_stop()
+        if self._settings.detector.input_profile == "ms5":
+            self.image_viewer.clear()
+            worker = Ms5PreviewWorker(Path(entry.path), self._preview_generation)
+            self._preview_worker = worker
+            worker.ready.connect(self._on_ms5_preview)
+            worker.failed.connect(self._window.status_bar_panel.set_message)
+            thread = start_in_thread(worker, "ms5_preview")
+            self._window.register_thread(thread, worker)
+            return
         try:
             path = Path(entry.path)
             if path.is_file():
@@ -875,7 +956,17 @@ class OfflineController(QObject):
         except Exception as exc:
             logger.warning("Could not preview file %s: %s", entry.path, exc)
 
+    @Slot(int, str, object)
+    def _on_ms5_preview(self, generation: int, path: str, image) -> None:
+        if generation != self._preview_generation:
+            return
+        self.image_viewer.set_image(image)
+        self.image_viewer.set_detections(self._detections_by_path.get(path, []))
+
     def _on_file_list_cleared(self) -> None:
+        self._preview_generation += 1
+        if self._preview_worker is not None:
+            self._preview_worker.request_stop()
         self._detections_by_path.clear()
         self.filter_panel.reset_extra_classes()
         self.image_viewer.clear()
@@ -910,6 +1001,8 @@ class OfflineController(QObject):
             # If currently selected item is this file, update detection overlay immediately
             selected = self.file_list_panel.selected_entry()
             if selected is not None and selected.path in (payload.source_path, norm_path):
+                if payload.image is not None:
+                    self.image_viewer.set_image(payload.image)
                 self.image_viewer.set_detections(detections)
 
         # Merge classes into filter panel
@@ -938,6 +1031,11 @@ class OfflineController(QObject):
         else:
             self._map_ctrl.map_locked_changed.emit(True, MAP_LOCKED_TEXT)
 
+    @Slot(str)
+    def _on_batch_error(self, message: str) -> None:
+        self._batch_errors.append(message)
+        self._window.status_bar_panel.set_message(message)
+
     def _on_batch_finished(self, succeeded: int, failed: int) -> None:
         try:
             self.batch_start_requested.disconnect()
@@ -947,12 +1045,15 @@ class OfflineController(QObject):
         self._window.status_bar_panel.set_progress(100)
         self._window.status_bar_panel.set_message(
             f"Обработка завершена: успешно {succeeded}, ошибок {failed}"
+            + (f". {self._batch_errors[-1]}" if self._batch_errors else "")
         )
         if self._batch_thread is not None:
             self._batch_thread.quit()
             self._batch_thread.wait(2000)
             self._batch_thread = None
         self._batch_worker = None
+        self.filter_panel.set_model_controls_enabled(True)
+        self.file_list_panel.btn_clear.setEnabled(True)
 
         # Build final aggregated layers: deduplicated points, KDE heatmap, prescription zones, mosaic, route
         self._on_map_updated()

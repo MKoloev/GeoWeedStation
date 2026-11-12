@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import json
 from pathlib import Path
 
@@ -109,6 +111,7 @@ class StreamSettings(BaseModel):
 class DetectorSettings(BaseModel):
     """ONNX neural network detector parameters."""
 
+    input_profile: Literal["rgb", "ms5"] = "rgb"
     model_path: Path = Path("models/weed_detection_yolo.onnx")
     classes_path: Path = Path("models/classes.json")
     confidence_threshold: float = 0.25

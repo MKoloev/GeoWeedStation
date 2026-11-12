@@ -129,7 +129,7 @@ def test_annotation_io_preserves_classification(tmp_path: Path):
 
 def test_real_resnet50_dualhead_c07_onnx_inference():
     """Verify inference on real resnet50_dualhead_c07.onnx if file is present."""
-    model_path = Path("/home/user/maximus/Ekat2026/flying_robotics/repositories/models/c07_rgb_geosaero/resnet50_dualhead_c07.onnx")
+    model_path = Path(__file__).resolve().parents[1] / "models/c07_rgb_geosaero/c07_rgb_geosaero_best.onnx"
     if not model_path.is_file():
         pytest.skip("resnet50_dualhead_c07.onnx not found")
 
@@ -163,7 +163,7 @@ def test_onnx_detector_two_stage_c07_integration(tmp_path: Path):
         Path("GeoWeedStation/models/resnet50_dualhead_c07.onnx"),
         Path("models/resnet50_dualhead_c07.onnx"),
         Path("models/c07_rgb_geosaero/resnet50_dualhead_c07.onnx"),
-        Path("/home/user/maximus/Ekat2026/flying_robotics/repositories/models/c07_rgb_geosaero/resnet50_dualhead_c07.onnx"),
+        Path(__file__).resolve().parents[1] / "models/c07_rgb_geosaero/c07_rgb_geosaero_best.onnx",
     ]
     cls_model = next((c for c in cands if c.is_file()), None)
     if cls_model is None:
